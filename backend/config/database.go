@@ -44,6 +44,10 @@ func ConnectDatabase(dsn string) (*gorm.DB, error) {
 		log.Printf("⚠️ AutoMigrate warning: %v", err)
 	} else {
 		log.Println("✅ Database schema migrated successfully: users, bio_pages, links")
+		// Run initial database seeder
+		if err := SeedDatabase(db); err != nil {
+			log.Printf("⚠️ SeedDatabase warning: %v", err)
+		}
 	}
 
 	DB = db

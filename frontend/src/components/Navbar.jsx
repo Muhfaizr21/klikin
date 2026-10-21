@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Logo from './Logo';
 
-export default function Navbar({ onNavigateToAuth }) {
+export default function Navbar({ user, onNavigateToAuth, onNavigateToDashboard }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -67,26 +67,39 @@ export default function Navbar({ onNavigateToAuth }) {
           <div className="h-4 w-[1px] bg-[var(--color-graphite)]" />
 
           <div className="flex items-center gap-3">
-            <a
-              href="#login"
-              onClick={(e) => {
-                e.preventDefault();
-                onNavigateToAuth?.('login');
-              }}
-              className="btn-ghost-dark text-xs py-1.5 px-3"
-            >
-              Login
-            </a>
-            <a
-              href="#register"
-              onClick={(e) => {
-                e.preventDefault();
-                onNavigateToAuth?.('register');
-              }}
-              className="btn-pill-white text-xs py-1.5 px-4 shadow-[0_2px_8px_rgba(255,255,255,0.15)]"
-            >
-              Coba Gratis
-            </a>
+            {user ? (
+              <button
+                type="button"
+                onClick={onNavigateToDashboard}
+                className="btn-pill-white text-xs py-1.5 px-4 shadow-[0_2px_8px_rgba(255,255,255,0.15)] flex items-center gap-2"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Dashboard ({user.role === 'SUPER_ADMIN' ? 'Admin' : 'Owner'})</span>
+              </button>
+            ) : (
+              <>
+                <a
+                  href="#login"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onNavigateToAuth?.('login');
+                  }}
+                  className="btn-ghost-dark text-xs py-1.5 px-3"
+                >
+                  Login
+                </a>
+                <a
+                  href="#register"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onNavigateToAuth?.('register');
+                  }}
+                  className="btn-pill-white text-xs py-1.5 px-4 shadow-[0_2px_8px_rgba(255,255,255,0.15)]"
+                >
+                  Coba Gratis
+                </a>
+              </>
+            )}
           </div>
         </div>
 
@@ -150,28 +163,44 @@ export default function Navbar({ onNavigateToAuth }) {
             </a>
           </nav>
           <div className="pt-3 border-t border-[var(--color-graphite)] flex flex-col gap-2">
-            <a
-              href="#login"
-              onClick={(e) => {
-                e.preventDefault();
-                setMobileMenuOpen(false);
-                onNavigateToAuth?.('login');
-              }}
-              className="btn-ghost-dark text-center py-2"
-            >
-              Login
-            </a>
-            <a
-              href="#register"
-              onClick={(e) => {
-                e.preventDefault();
-                setMobileMenuOpen(false);
-                onNavigateToAuth?.('register');
-              }}
-              className="btn-acid text-center py-2"
-            >
-              Coba Gratis
-            </a>
+            {user ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onNavigateToDashboard?.();
+                }}
+                className="btn-pill-white text-center py-2 text-xs flex items-center justify-center gap-2"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Dashboard ({user.role === 'SUPER_ADMIN' ? 'Admin' : 'Owner'})</span>
+              </button>
+            ) : (
+              <>
+                <a
+                  href="#login"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setMobileMenuOpen(false);
+                    onNavigateToAuth?.('login');
+                  }}
+                  className="btn-ghost-dark text-center py-2"
+                >
+                  Login
+                </a>
+                <a
+                  href="#register"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setMobileMenuOpen(false);
+                    onNavigateToAuth?.('register');
+                  }}
+                  className="btn-acid text-center py-2"
+                >
+                  Coba Gratis
+                </a>
+              </>
+            )}
           </div>
         </div>
       )}

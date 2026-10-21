@@ -7,11 +7,24 @@ import Pricing from './components/Pricing';
 import FAQ from './components/FAQ';
 import Footer from './components/Footer';
 import AuthPage from './components/AuthPage';
+import Dashboard from './components/Dashboard';
 import './App.css';
 
 export default function App() {
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem('klikin_token') || null);
+  const [authUser, setAuthUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klikin_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [currentView, setCurrentView] = useState(() => {
     const hash = window.location.hash.toLowerCase();
+    const token = localStorage.getItem('klikin_token');
+    if (hash === '#dashboard' && token) return 'dashboard';
     if (hash === '#login') return 'login';
     if (hash === '#register') return 'register';
     return 'landing';
@@ -20,7 +33,13 @@ export default function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.toLowerCase();
-      if (hash === '#login') {
+      if (hash === '#dashboard') {
+        if (authToken) {
+          setCurrentView('dashboard');
+        } else {
+          setCurrentView('login');
+        }
+      } else if (hash === '#login') {
         setCurrentView('login');
       } else if (hash === '#register') {
         setCurrentView('register');
@@ -31,7 +50,7 @@ export default function App() {
 
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
+  }, [authToken]);
 
   const handleNavigateToAuth = (mode) => {
     window.location.hash = `#${mode}`;
@@ -45,18 +64,60 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleNavigateToDashboard = () => {
+    window.location.hash = '#dashboard';
+    setCurrentView('dashboard');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleAuthSuccess = (user, token) => {
+    setAuthUser(user);
+    setAuthToken(token);
+    localStorage.setItem('klikin_user', JSON.stringify(user));
+    localStorage.setItem('klikin_token', token);
+    window.location.hash = '#dashboard';
+    setCurrentView('dashboard');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleLogout = () => {
+    setAuthUser(null);
+    setAuthToken(null);
+    localStorage.removeItem('klikin_user');
+    localStorage.removeItem('klikin_token');
+    window.location.hash = '';
+    setCurrentView('landing');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  if (currentView === 'dashboard' && authUser && authToken) {
+    return (
+      <Dashboard
+        user={authUser}
+        token={authToken}
+        onLogout={handleLogout}
+        onBackToHome={handleBackToHome}
+      />
+    );
+  }
+
   if (currentView === 'login' || currentView === 'register') {
     return (
       <AuthPage
         initialMode={currentView}
         onBackToHome={handleBackToHome}
+        onAuthSuccess={handleAuthSuccess}
       />
     );
   }
 
   return (
     <div className="main-wrapper">
-      <Navbar onNavigateToAuth={handleNavigateToAuth} />
+      <Navbar
+        user={authUser}
+        onNavigateToAuth={handleNavigateToAuth}
+        onNavigateToDashboard={handleNavigateToDashboard}
+      />
       <main>
         <Hero onNavigateToRegister={() => handleNavigateToAuth('register')} />
         <ProblemSolution />
@@ -68,3 +129,4 @@ export default function App() {
     </div>
   );
 }
+

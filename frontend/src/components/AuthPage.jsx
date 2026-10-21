@@ -11,7 +11,7 @@ import {
   AlertCircleIcon,
 } from './Icons';
 
-export default function AuthPage({ initialMode = 'login', onBackToHome }) {
+export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSuccess }) {
   const [mode, setMode] = useState(initialMode); // 'login' | 'register'
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -44,38 +44,47 @@ export default function AuthPage({ initialMode = 'login', onBackToHome }) {
     setLoading(true);
 
     try {
-      if (mode === 'register') {
-        const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: {
-            data: {
-              full_name: fullName || undefined,
-            },
-          },
-        });
+      const endpoint = mode === 'register' ? 'http://localhost:8080/api/auth/register' : 'http://localhost:8080/api/auth/login';
+      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+      const derivedUsername = (email.split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-        if (error) throw error;
+      const payload = mode === 'register'
+        ? {
+            email: email.trim(),
+            password,
+            full_name: fullName || 'Pengguna Klikin',
+            username: derivedUsername,
+          }
+        : {
+            email: email.trim(),
+            password,
+          };
 
-        setFeedback({
-          type: 'success',
-          message: data?.user?.identities?.length === 0
-            ? 'Akun dengan email ini sudah terdaftar. Silakan klik Log in.'
-            : 'Pendaftaran berhasil! Cek email konfirmasi Anda.',
-        });
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
-        if (error) throw error;
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || resData.message || 'Gagal memproses autentikasi akun.');
+      }
 
-        setFeedback({
-          type: 'success',
-          message: 'Berhasil masuk! Mengarahkan ke dashboard...',
-        });
+      const user = resData.data.user;
+      const token = resData.data.token;
+
+      setFeedback({
+        type: 'success',
+        message: mode === 'register'
+          ? 'Registrasi berhasil! Membuka dashboard...'
+          : `Login berhasil sebagai ${user.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Owner'}! Membuka workspace...`,
+      });
+
+      if (onAuthSuccess) {
+        setTimeout(() => {
+          onAuthSuccess(user, token);
+        }, 500);
       }
     } catch (err) {
       setFeedback({
@@ -219,10 +228,54 @@ export default function AuthPage({ initialMode = 'login', onBackToHome }) {
           </div>
 
           {/* Horizontal Divider */}
-          <div className="flex items-center gap-3 mb-5">
+          <div className="flex items-center gap-3 mb-4">
             <div className="flex-1 h-px bg-white/10" />
-            <span className="text-xs text-zinc-500 font-normal">Or</span>
+            <span className="text-xs text-zinc-500 font-normal">Or continue with email</span>
             <div className="flex-1 h-px bg-white/10" />
+          </div>
+
+          {/* Quick Demo Test Accounts (Superadmin & Owner) */}
+          <div className="mb-5 p-3 rounded-xl bg-purple-950/20 border border-purple-500/20">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-mono text-purple-300 font-medium tracking-wide">
+                Akun Demo Uji Coba:
+              </span>
+              <span className="text-[10px] text-zinc-400 font-mono">Klik untuk Isi Cepat</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('admin@klikin.id');
+                  setPassword('admin12345');
+                  setMode('login');
+                  setFeedback(null);
+                }}
+                className="text-left p-2 rounded-lg bg-white/[0.04] hover:bg-purple-600/20 border border-white/5 hover:border-purple-500/30 transition-all text-xs group"
+              >
+                <div className="font-semibold text-white group-hover:text-purple-300 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                  <span>Super Admin</span>
+                </div>
+                <div className="text-[10px] text-zinc-400 font-mono truncate">admin@klikin.id</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('owner@klikin.id');
+                  setPassword('owner12345');
+                  setMode('login');
+                  setFeedback(null);
+                }}
+                className="text-left p-2 rounded-lg bg-white/[0.04] hover:bg-emerald-600/20 border border-white/5 hover:border-emerald-500/30 transition-all text-xs group"
+              >
+                <div className="font-semibold text-white group-hover:text-emerald-300 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  <span>Owner Toko</span>
+                </div>
+                <div className="text-[10px] text-zinc-400 font-mono truncate">owner@klikin.id</div>
+              </button>
+            </div>
           </div>
 
           {/* Feedback Alert */}
