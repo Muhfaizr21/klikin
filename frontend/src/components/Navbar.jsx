@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Logo from './Logo';
 
 export default function Navbar({ onNavigateToAuth }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -30,17 +31,8 @@ export default function Navbar({ onNavigateToAuth }) {
     >
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         {/* Left: Brand Logo */}
-        <a
-          href="/"
-          className="flex items-center gap-2.5 text-[var(--color-paper)] font-[510] text-[17px] tracking-tight group"
-        >
-          <span className="w-7 h-7 rounded-md bg-[var(--color-carbon)] border border-[var(--color-graphite)] group-hover:border-[var(--color-smoke)] flex items-center justify-center text-[var(--color-acid-lime)] transition-colors shadow-inner">
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-            </svg>
-          </span>
-          <span className="font-sans tracking-[-0.022em] text-white">klikin</span>
+        <a href="/" className="inline-flex items-center">
+          <Logo size={28} textClassName="text-[17px]" />
         </a>
 
         {/* Right: Navigation Links + Action Buttons grouped on the RIGHT */}

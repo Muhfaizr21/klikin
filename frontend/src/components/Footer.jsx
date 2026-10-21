@@ -1,4 +1,5 @@
 import React from 'react';
+import Logo from './Logo';
 
 export default function Footer({ onNavigateToAuth }) {
   return (
@@ -7,14 +8,8 @@ export default function Footer({ onNavigateToAuth }) {
         <div className="flex flex-col md:flex-row justify-between gap-10 mb-12">
           {/* Brand & mission */}
           <div className="max-w-sm">
-            <div className="flex items-center gap-2.5 text-[var(--color-paper)] font-[510] text-lg mb-3">
-              <span className="w-6 h-6 rounded-md bg-[var(--color-carbon)] border border-[var(--color-graphite)] flex items-center justify-center text-[var(--color-acid-lime)] shadow-inner">
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                </svg>
-              </span>
-              <span className="tracking-tight">klikin</span>
+            <div className="mb-3">
+              <Logo size={28} textClassName="text-lg" />
             </div>
             <p className="text-sm text-[var(--color-fog)] leading-relaxed mb-4">
               Platform Link-in-Bio terjangkau untuk influencer, toko online, dan kreator konten Indonesia. Satu URL cepat untuk semua peluang bisnis Anda.

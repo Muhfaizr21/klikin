@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { LogoMark } from './Logo';
 import {
   ShoppingBagIcon,
   MessageCircleIcon,
@@ -264,8 +265,9 @@ export default function BioPagePreview() {
                 </div>
 
                 {/* Micro branding footer */}
-                <div className="mt-auto pt-6 text-[10px] text-[var(--color-fog)] font-mono flex items-center gap-1">
+                <div className="mt-auto pt-6 text-[10px] text-[var(--color-fog)] font-mono flex items-center gap-1.5">
                   <span>Powered by</span>
+                  <LogoMark size={14} className="w-3.5 h-3.5 rounded" />
                   <span className="text-white font-[510]">klikin</span>
                 </div>
               </>

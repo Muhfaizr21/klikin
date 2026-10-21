@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import Logo from './Logo';
 import {
   GoogleIcon,
   GithubIcon,
@@ -119,13 +120,8 @@ export default function AuthPage({ initialMode = 'login', onBackToHome }) {
 
             <div className="relative z-10 w-full max-w-sm flex flex-col items-center">
               {/* Brand Logo & Name */}
-              <div className="flex items-center gap-2 mb-5">
-                <span className="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-[10px]">
-                  <span className="w-2 h-2 rounded-full bg-white" />
-                </span>
-                <span className="font-semibold text-[17px] tracking-tight text-white">
-                  klikin
-                </span>
+              <div className="mb-6">
+                <Logo size={32} textClassName="text-[18px]" />
               </div>
 
               {/* Title & Subtitle */}
