@@ -76,10 +76,10 @@ export default function Navbar() {
 
           <div className="flex items-center gap-3">
             <a
-              href="#demo"
+              href="#login"
               className="btn-ghost-dark text-xs py-1.5 px-3"
             >
-              Lihat Demo
+              Login
             </a>
             <a
               href="#claim"
@@ -151,11 +151,11 @@ export default function Navbar() {
           </nav>
           <div className="pt-3 border-t border-[var(--color-graphite)] flex flex-col gap-2">
             <a
-              href="#demo"
+              href="#login"
               onClick={() => setMobileMenuOpen(false)}
               className="btn-ghost-dark text-center py-2"
             >
-              Lihat Demo
+              Login
             </a>
             <a
               href="#claim"
