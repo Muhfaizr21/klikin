@@ -1,0 +1,29 @@
+# Node
+node_modules/
+.npm
+dist/
+dist-ssr/
+*.local
+
+# Go
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+backend/klikin-backend
+
+# Env
+.env
+.env.*
+!.env.example
+
+# OS & Editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
