@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Footer() {
+export default function Footer({ onNavigateToAuth }) {
   return (
     <footer className="border-t border-[var(--color-graphite)] bg-[var(--color-void)] pt-16 pb-12">
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
@@ -60,12 +60,26 @@ export default function Footer() {
               </div>
               <ul className="space-y-2 text-[var(--color-fog)]">
                 <li>
-                  <a href="#claim" className="hover:text-white transition-colors">
-                    Klaim Link Baru
+                  <a
+                    href="#register"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onNavigateToAuth?.('register');
+                    }}
+                    className="hover:text-white transition-colors"
+                  >
+                    Daftar Akun Baru
                   </a>
                 </li>
                 <li>
-                  <a href="#claim" className="hover:text-white transition-colors">
+                  <a
+                    href="#login"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onNavigateToAuth?.('login');
+                    }}
+                    className="hover:text-white transition-colors"
+                  >
                     Masuk ke Akun
                   </a>
                 </li>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export default function Navbar() {
+export default function Navbar({ onNavigateToAuth }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -77,12 +77,20 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             <a
               href="#login"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateToAuth?.('login');
+              }}
               className="btn-ghost-dark text-xs py-1.5 px-3"
             >
               Login
             </a>
             <a
-              href="#claim"
+              href="#register"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateToAuth?.('register');
+              }}
               className="btn-pill-white text-xs py-1.5 px-4 shadow-[0_2px_8px_rgba(255,255,255,0.15)]"
             >
               Coba Gratis
@@ -152,14 +160,22 @@ export default function Navbar() {
           <div className="pt-3 border-t border-[var(--color-graphite)] flex flex-col gap-2">
             <a
               href="#login"
-              onClick={() => setMobileMenuOpen(false)}
+              onClick={(e) => {
+                e.preventDefault();
+                setMobileMenuOpen(false);
+                onNavigateToAuth?.('login');
+              }}
               className="btn-ghost-dark text-center py-2"
             >
               Login
             </a>
             <a
-              href="#claim"
-              onClick={() => setMobileMenuOpen(false)}
+              href="#register"
+              onClick={(e) => {
+                e.preventDefault();
+                setMobileMenuOpen(false);
+                onNavigateToAuth?.('register');
+              }}
               className="btn-acid text-center py-2"
             >
               Coba Gratis
