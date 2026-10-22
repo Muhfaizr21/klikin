@@ -12,8 +12,7 @@ import {
   SparklesIcon,
 } from '../Icons';
 import { supabase } from '../../lib/supabase';
-
-const API_BASE = 'http://localhost:8080/api';
+import { API_BASE } from '../../lib/api';
 
 export default function OwnerNotifications({ user, token }) {
   const [loading, setLoading] = useState(true);

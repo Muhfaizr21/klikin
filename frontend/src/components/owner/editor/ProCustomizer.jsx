@@ -2,6 +2,7 @@ import React from 'react';
 import { SPACING_OPTIONS } from './themes';
 import { CodeIcon, ImageIcon, GlobeIcon, SparklesIcon, CheckIcon, TrashIcon, UploadIcon } from '../../Icons';
 import { fileToWebP } from '../../../utils/imageUtils';
+import { navigateTo } from '../../../utils/navigation';
 
 const BG_PRESETS = [
   {
@@ -97,7 +98,7 @@ export default function ProCustomizer({
           <button
             type="button"
             onClick={() => {
-              window.location.hash = '#billing';
+              navigateTo('/owner/billing');
             }}
             className="px-3.5 py-1.5 bg-white text-slate-900 font-bold text-xs rounded-lg hover:bg-slate-100 active:scale-95 transition-all shrink-0 cursor-pointer"
           >

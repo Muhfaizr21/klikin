@@ -19,9 +19,11 @@ type Config struct {
 }
 
 func LoadConfig() *Config {
-	// Attempt to load .env file if present
+	// Attempt to load .env file if present (with fallback for root dir)
 	if err := godotenv.Load(); err != nil {
-		log.Println("ℹ️  No .env file found or failed to load, reading from system environment")
+		if err2 := godotenv.Load("backend/.env"); err2 != nil {
+			log.Println("ℹ️  No .env file found or failed to load, reading from system environment")
+		}
 	}
 
 	port := os.Getenv("PORT")

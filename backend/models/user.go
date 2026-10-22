@@ -21,9 +21,17 @@ type User struct {
 	Password  string    `gorm:"not null" json:"-"`
 	Role      UserRole  `gorm:"type:varchar(32);default:'ACCOUNT_OWNER'" json:"role"`
 	IsPro     bool      `gorm:"default:false" json:"is_pro"`
-	Pages     []BioPage `gorm:"foreignKey:UserID" json:"pages,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	AvatarURL         string     `gorm:"type:text" json:"avatar_url"`
+	PhoneNumber       string     `gorm:"type:varchar(32)" json:"phone_number"`
+	Bio               string     `gorm:"type:varchar(255)" json:"bio"`
+	Website           string     `gorm:"type:varchar(255)" json:"website"`
+	Timezone          string     `gorm:"type:varchar(64);default:'Asia/Jakarta'" json:"timezone"`
+	Language          string     `gorm:"type:varchar(10);default:'id'" json:"language"`
+	TwoFactorEnabled  bool       `gorm:"default:false" json:"two_factor_enabled"`
+	PasswordChangedAt *time.Time `json:"password_changed_at,omitempty"`
+	Pages             []BioPage  `gorm:"foreignKey:UserID" json:"pages,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 // HashPassword hashes a raw password using bcrypt

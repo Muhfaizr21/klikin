@@ -10,6 +10,7 @@ import (
 	publicCtrl "klikin-backend/controllers/public"
 	"klikin-backend/middlewares"
 	"klikin-backend/models"
+	accountSvc "klikin-backend/services/account"
 	adminSvc "klikin-backend/services/admin"
 	analyticsSvc "klikin-backend/services/analytics"
 	authSvc "klikin-backend/services/auth"
@@ -28,6 +29,7 @@ func SetupRoutes(cfg *config.Config) http.Handler {
 
 	// 1. Initialize Domain Services (Clean Architecture)
 	authService := authSvc.NewAuthService(config.DB)
+	accountService := accountSvc.NewAccountService(config.DB)
 	adminService := adminSvc.NewAdminService(config.DB)
 	ownerService := ownerSvc.NewOwnerService(config.DB)
 	analyticsService := analyticsSvc.NewAnalyticsService(config.DB)
@@ -40,6 +42,7 @@ func SetupRoutes(cfg *config.Config) http.Handler {
 
 	// 2. Initialize Controllers with Injected Services
 	authController := authCtrl.NewAuthController(authService)
+	accountController := ownerCtrl.NewAccountController(accountService)
 	adminController := adminCtrl.NewAdminController(adminService)
 	ownerController := ownerCtrl.NewOwnerController(ownerService)
 	analyticsController := ownerCtrl.NewAnalyticsController(analyticsService)
@@ -136,6 +139,16 @@ func SetupRoutes(cfg *config.Config) http.Handler {
 	mux.HandleFunc("GET /api/owner/support/faq", supportController.GetFAQs)
 	mux.HandleFunc("POST /api/owner/support/contact", middlewares.RequireRole(models.RoleAccountOwner, supportController.SubmitContact))
 	mux.HandleFunc("POST /api/owner/support/feedback", middlewares.RequireRole(models.RoleAccountOwner, supportController.SubmitFeedback))
+
+	// --- 11. USER ACCOUNT & SECURITY ENDPOINTS (Readme 4.1 & Startup Spec) ---
+	mux.HandleFunc("GET /api/user/profile", middlewares.RequireAuth(accountController.GetProfile))
+	mux.HandleFunc("PUT /api/user/profile", middlewares.RequireAuth(accountController.UpdateProfile))
+	mux.HandleFunc("PUT /api/user/password", middlewares.RequireAuth(accountController.ChangePassword))
+	mux.HandleFunc("PUT /api/user/2fa", middlewares.RequireAuth(accountController.Toggle2FA))
+	mux.HandleFunc("GET /api/user/sessions", middlewares.RequireAuth(accountController.GetSessions))
+	mux.HandleFunc("POST /api/user/sessions/revoke-others", middlewares.RequireAuth(accountController.RevokeOtherSessions))
+	mux.HandleFunc("GET /api/user/export", middlewares.RequireAuth(accountController.ExportData))
+	mux.HandleFunc("DELETE /api/user/account", middlewares.RequireAuth(accountController.DeleteAccount))
 
 	// Apply Middlewares (Logger, CORS)
 	handler := middlewares.Logger(mux)

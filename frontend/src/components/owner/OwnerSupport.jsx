@@ -21,15 +21,14 @@ import {
   ZapIcon,
   PaletteIcon,
 } from '../Icons';
-
-const API_BASE = 'http://localhost:8080/api';
+import { API_BASE } from '../../lib/api';
 
 const TICKET_CATEGORIES = [
   {
     id: 'technical',
     label: 'Teknis & Bug',
     badge: 'Bug / Error',
-    desc: 'Kendala fitur, error sistem, atau halaman bio bermasalah',
+    desc: 'Kendala fitur, halaman bio lambat, atau error sistem',
     icon: AlertCircleIcon,
     color: 'text-rose-600 bg-rose-50 border-rose-200',
   },
@@ -37,7 +36,7 @@ const TICKET_CATEGORIES = [
     id: 'domain',
     label: 'Domain Kustom & DNS',
     badge: 'DNS / SSL',
-    desc: 'Panduan delegasi CNAME, propagasi DNS, atau sertifikat SSL',
+    desc: 'Panduan konfigurasi CNAME, propagasi DNS, atau SSL',
     icon: GlobeIcon,
     color: 'text-indigo-600 bg-indigo-50 border-indigo-200',
   },
@@ -45,7 +44,7 @@ const TICKET_CATEGORIES = [
     id: 'billing',
     label: 'Pembayaran & Langganan',
     badge: 'Billing / Pro',
-    desc: 'Faktur, checkout Stripe, kendala kartu, atau status langganan',
+    desc: 'Faktur, checkout Stripe, kendala kartu, atau kuota aktif',
     icon: CreditCardIcon,
     color: 'text-emerald-600 bg-emerald-50 border-emerald-200',
   },
@@ -53,7 +52,7 @@ const TICKET_CATEGORIES = [
     id: 'feature',
     label: 'Fitur & Integrasi',
     badge: 'Integrasi',
-    desc: 'Setup Meta Pixel, TikTok, Lead Magnet, & autoresponder',
+    desc: 'Setup Meta Pixel, TikTok Pixel, Lead Magnet, & autoresponder',
     icon: ZapIcon,
     color: 'text-amber-600 bg-amber-50 border-amber-200',
   },
@@ -63,7 +62,7 @@ const TICKET_CATEGORIES = [
     badge: 'Umum',
     desc: 'Konsultasi akun, panduan platform, atau bantuan operasional',
     icon: HelpCircleIcon,
-    color: 'text-sky-600 bg-sky-50 border-sky-200',
+    color: 'text-slate-600 bg-slate-50 border-slate-200',
   },
 ];
 
@@ -72,8 +71,8 @@ const TICKET_PRIORITIES = [
     id: 'low',
     label: 'Rendah',
     sub: 'Pertanyaan umum',
-    dot: 'bg-sky-500',
-    activeClass: 'border-sky-500 bg-sky-50/70 ring-2 ring-sky-500/20 text-sky-950 font-bold',
+    dot: 'bg-slate-400',
+    activeClass: 'border-slate-900 bg-slate-50 ring-2 ring-slate-900/10 text-slate-900 font-bold',
   },
   {
     id: 'medium',
@@ -85,7 +84,7 @@ const TICKET_PRIORITIES = [
   {
     id: 'high',
     label: 'Tinggi',
-    sub: 'Kritis / Mengganggu',
+    sub: 'Kritis / Mendesak',
     dot: 'bg-rose-500',
     pulsing: true,
     activeClass: 'border-rose-500 bg-rose-50/70 ring-2 ring-rose-500/20 text-rose-950 font-bold',
@@ -95,7 +94,6 @@ const TICKET_PRIORITIES = [
 export default function OwnerSupport({ user, token }) {
   const [activeTab, setActiveTab] = useState('tickets'); // 'tickets' | 'faq' | 'contact' | 'feedback'
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [feedback, setFeedback] = useState(null);
 
   // Tickets state
@@ -105,6 +103,8 @@ export default function OwnerSupport({ user, token }) {
   const [replyMessage, setReplyMessage] = useState('');
   const [replyAttachment, setReplyAttachment] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
+  const [ticketSearch, setTicketSearch] = useState('');
+  const [ticketFilterStatus, setTicketFilterStatus] = useState('all');
 
   // New Ticket Modal State
   const [showNewTicketModal, setShowNewTicketModal] = useState(false);
@@ -126,7 +126,7 @@ export default function OwnerSupport({ user, token }) {
 
   // Contact Form State
   const [contactForm, setContactForm] = useState({
-    name: user?.name || 'Kopi Seduh Nusantara',
+    name: user?.name || user?.full_name || 'Kopi Seduh Nusantara',
     email: user?.email || 'kopi@nusantara.id',
     subject: '',
     message: '',
@@ -143,7 +143,6 @@ export default function OwnerSupport({ user, token }) {
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
   const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
-  const effectiveUserId = user?.id || 'usr_owner_kopi';
 
   useEffect(() => {
     fetchInitialData();
@@ -151,7 +150,6 @@ export default function OwnerSupport({ user, token }) {
 
   const fetchInitialData = async () => {
     setLoading(true);
-    setError(null);
     try {
       await Promise.all([fetchTickets(), fetchFAQs()]);
     } catch (err) {
@@ -365,28 +363,71 @@ export default function OwnerSupport({ user, token }) {
   const getStatusBadge = (status) => {
     switch (status) {
       case 'open':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">Menunggu Respon</span>;
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/80">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            Menunggu Respon
+          </span>
+        );
       case 'in_progress':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Sedang Diproses</span>;
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-sky-50 text-sky-800 border border-sky-200/80">
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+            Sedang Diproses
+          </span>
+        );
       case 'waiting_user':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">Menunggu Balasan Anda</span>;
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-800 border border-indigo-200/80">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+            Menunggu Balasan Anda
+          </span>
+        );
       case 'resolved':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Selesai</span>;
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+            <CheckIcon className="w-3 h-3 text-emerald-600" />
+            Selesai
+          </span>
+        );
       case 'closed':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-600">Ditutup</span>;
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+            Ditutup
+          </span>
+        );
       default:
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-700">{status}</span>;
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700">
+            {status}
+          </span>
+        );
     }
   };
 
   const getPriorityBadge = (priority) => {
     switch (priority) {
       case 'high':
-        return <span className="text-xs font-medium text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">Tinggi</span>;
+        return (
+          <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+            Tinggi
+          </span>
+        );
       case 'medium':
-        return <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">Sedang</span>;
+        return (
+          <span className="text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            Sedang
+          </span>
+        );
       case 'low':
-        return <span className="text-xs font-medium text-zinc-600 bg-zinc-50 px-2 py-0.5 rounded border border-zinc-200">Rendah</span>;
+        return (
+          <span className="text-[11px] font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+            Rendah
+          </span>
+        );
       default:
         return null;
     }
@@ -427,128 +468,196 @@ export default function OwnerSupport({ user, token }) {
     return matchesCategory && matchesSearch;
   });
 
+  // Filtered tickets
+  const filteredTickets = tickets.filter((t) => {
+    const matchStatus =
+      ticketFilterStatus === 'all'
+        ? true
+        : ticketFilterStatus === 'active'
+        ? t.status === 'open' || t.status === 'in_progress' || t.status === 'waiting_user'
+        : t.status === 'resolved' || t.status === 'closed';
+
+    const matchSearch =
+      !ticketSearch ||
+      t.ticket_number?.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+      t.subject?.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+      t.description?.toLowerCase().includes(ticketSearch.toLowerCase());
+
+    return matchStatus && matchSearch;
+  });
+
+  const activeTicketsCount = tickets.filter(
+    (t) => t.status === 'open' || t.status === 'in_progress' || t.status === 'waiting_user'
+  ).length;
+
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-16">
+    <div className="max-w-6xl mx-auto space-y-6 pb-16 font-sans">
       {/* Toast Feedback */}
       {feedback && (
         <div
-          className={`p-4 rounded-xl flex items-center justify-between shadow-lg border transition-all animate-in fade-in slide-in-from-top-4 ${
+          className={`p-4 rounded-2xl flex items-center justify-between shadow-sm border transition-all animate-in fade-in slide-in-from-top-4 ${
             feedback.type === 'success'
-              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800'
-              : 'bg-rose-500/10 border-rose-500/30 text-rose-800'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
           }`}
         >
           <div className="flex items-center gap-3">
             {feedback.type === 'success' ? (
-              <CheckIcon className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+              <CheckIcon className="w-5 h-5 text-emerald-600 shrink-0" />
             ) : (
-              <AlertCircleIcon className="w-5 h-5 text-rose-600 flex-shrink-0" />
+              <AlertCircleIcon className="w-5 h-5 text-rose-600 shrink-0" />
             )}
-            <span className="text-sm font-medium">{feedback.msg}</span>
+            <span className="text-xs sm:text-sm font-semibold">{feedback.msg}</span>
           </div>
           <button
             onClick={() => setFeedback(null)}
-            className="text-xs font-semibold px-2 py-1 rounded hover:bg-black/5"
+            className="text-xs font-semibold px-2.5 py-1 rounded-lg hover:bg-black/5 text-slate-600"
           >
             Tutup
           </button>
         </div>
       )}
 
-      {/* Hero Header */}
-      <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-12 -translate-y-8 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold tracking-wide">
-              <LifeBuoyIcon className="w-3.5 h-3.5" />
-              <span>Klikin Care & Help Center</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Pusat Bantuan & Layanan Support</h1>
-            <p className="text-white/80 text-sm sm:text-base leading-relaxed">
-              Punya pertanyaan seputar domain, pembayaran, atau fitur bio link? Tim spesialis kami siap membantu Anda 24/7.
+      {/* Modern Startup Hero Header: Clean White, Slate-900 & Refined Accent */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-xs relative overflow-hidden">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2 max-w-2xl">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+              Pusat Bantuan & Layanan Support
+            </h1>
+            <p className="text-slate-500 text-xs sm:text-sm leading-relaxed">
+              Dukungan teknis responsif seputar domain kustom, analitik, integrasi pixel iklan, dan pertumbuhan halaman bio link Anda.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <a
+              href="https://wa.me/6281234567890?text=Halo%20Tim%20Klikin%2C%20saya%20butuh%20bantuan%20seputar%20akun%20saya."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2.5 rounded-xl font-semibold text-xs bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200 transition-all flex items-center gap-2 shadow-2xs active:scale-98"
+            >
+              <MessageCircleIcon className="w-3.5 h-3.5 text-emerald-600" />
+              <span>WhatsApp Official</span>
+            </a>
+
             <button
               onClick={() => {
                 setSelectedTicket(null);
                 setShowNewTicketModal(true);
               }}
-              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-white text-emerald-700 hover:bg-emerald-50 transition shadow-lg flex items-center gap-2"
+              className="px-4 py-2.5 rounded-xl font-bold text-xs bg-slate-900 hover:bg-slate-800 text-white transition-all shadow-sm flex items-center gap-2 active:scale-98 cursor-pointer"
             >
-              <MessageCircleIcon className="w-4 h-4" />
-              <span>Buka Tiket Baru</span>
+              <LifeBuoyIcon className="w-3.5 h-3.5" />
+              <span>+ Buka Tiket Baru</span>
             </button>
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="mt-8 pt-4 border-t border-white/20 flex flex-wrap gap-2">
-          <button
-            onClick={() => {
-              setActiveTab('tickets');
-              setSelectedTicket(null);
-            }}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-2 ${
-              activeTab === 'tickets'
-                ? 'bg-white text-emerald-800 shadow-md'
-                : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            <LifeBuoyIcon className="w-4 h-4" />
-            <span>Tiket Bantuan</span>
-            {tickets.length > 0 && (
-              <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                {tickets.length}
-              </span>
-            )}
-          </button>
+        {/* 3 Metric Insight Pills */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6 mt-6 border-t border-slate-100">
+          <div className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/60 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-800 shrink-0 shadow-2xs">
+              <ClockIcon className="w-4 h-4 text-slate-700" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-900 leading-tight">Rata-rata Respon &lt; 15 Menit</p>
+              <p className="text-[10px] text-slate-500 font-medium">Jam kerja 08.00 - 22.00 WIB</p>
+            </div>
+          </div>
 
-          <button
-            onClick={() => setActiveTab('faq')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-2 ${
-              activeTab === 'faq'
-                ? 'bg-white text-emerald-800 shadow-md'
-                : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            <HelpCircleIcon className="w-4 h-4" />
-            <span>FAQ & Panduan</span>
-          </button>
+          <div className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/60 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-800 shrink-0 shadow-2xs">
+              <ShieldCheckIcon className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-900 leading-tight">Dukungan Tim Teknis Resmi</p>
+              <p className="text-[10px] text-slate-500 font-medium">Tiket tersimpan rapi dan terenkripsi</p>
+            </div>
+          </div>
 
-          <button
-            onClick={() => setActiveTab('contact')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-2 ${
-              activeTab === 'contact'
-                ? 'bg-white text-emerald-800 shadow-md'
-                : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            <MailIcon className="w-4 h-4" />
-            <span>Formulir Kontak</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('feedback')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-2 ${
-              activeTab === 'feedback'
-                ? 'bg-white text-emerald-800 shadow-md'
-                : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            <SparklesIcon className="w-4 h-4" />
-            <span>Kirim Saran Fitur</span>
-          </button>
+          <div className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/60 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-800 shrink-0 shadow-2xs">
+              <SparklesIcon className="w-4 h-4 text-amber-500" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-900 leading-tight">18+ Panduan & Solusi Instan</p>
+              <p className="text-[10px] text-slate-500 font-medium">Jelajahi basis pengetahuan & FAQ</p>
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* Segmented Control Navigation Tabs (Linear / Apple Minimalist Style) */}
+      <div className="bg-slate-100/90 p-1.5 rounded-xl border border-slate-200/70 inline-flex flex-wrap gap-1 shadow-2xs">
+        <button
+          onClick={() => {
+            setActiveTab('tickets');
+            setSelectedTicket(null);
+          }}
+          className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'tickets'
+              ? 'bg-white text-slate-900 shadow-xs border border-slate-200/70 font-bold'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+          }`}
+        >
+          <LifeBuoyIcon className="w-3.5 h-3.5" />
+          <span>Tiket Bantuan</span>
+          {tickets.length > 0 && (
+            <span
+              className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                activeTab === 'tickets'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {tickets.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('faq')}
+          className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'faq'
+              ? 'bg-white text-slate-900 shadow-xs border border-slate-200/70 font-bold'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+          }`}
+        >
+          <HelpCircleIcon className="w-3.5 h-3.5" />
+          <span>Pusat Panduan & FAQ</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('contact')}
+          className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'contact'
+              ? 'bg-white text-slate-900 shadow-xs border border-slate-200/70 font-bold'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+          }`}
+        >
+          <MailIcon className="w-3.5 h-3.5" />
+          <span>Formulir Kontak</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('feedback')}
+          className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'feedback'
+              ? 'bg-white text-slate-900 shadow-xs border border-slate-200/70 font-bold'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+          }`}
+        >
+          <SparklesIcon className="w-3.5 h-3.5" />
+          <span>Kirim Saran Fitur</span>
+        </button>
       </div>
 
       {/* Main Tab Content */}
       {loading ? (
-        <div className="bg-white border border-zinc-200 rounded-3xl p-16 text-center shadow-sm">
-          <RefreshCwIcon className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />
-          <p className="text-zinc-500 font-medium text-sm">Memuat layanan support & data tiket...</p>
+        <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center shadow-xs">
+          <RefreshCwIcon className="w-7 h-7 text-slate-400 animate-spin mx-auto mb-3" />
+          <p className="text-slate-500 font-medium text-xs">Memuat layanan support & data tiket...</p>
         </div>
       ) : (
         <>
@@ -557,35 +666,35 @@ export default function OwnerSupport({ user, token }) {
             <div className="space-y-6">
               {selectedTicket ? (
                 /* Ticket Detail & Conversation Thread */
-                <div className="bg-white border border-zinc-200 rounded-3xl shadow-sm overflow-hidden">
-                  {/* Ticket Header */}
-                  <div className="p-6 bg-zinc-50/60 border-b border-zinc-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="space-y-1">
+                <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
+                  {/* Ticket Header Bar */}
+                  <div className="p-5 sm:p-6 bg-slate-50/70 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1.5">
                       <div className="flex items-center gap-2 flex-wrap">
                         <button
                           onClick={() => setSelectedTicket(null)}
-                          className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 mr-2 flex items-center gap-1"
+                          className="text-xs font-bold text-slate-700 hover:text-slate-900 mr-2 flex items-center gap-1.5 transition-colors cursor-pointer"
                         >
-                          &larr; Kembali ke Daftar
+                          <span>&larr; Kembali ke Daftar</span>
                         </button>
-                        <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-zinc-200 text-zinc-700">
+                        <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700 shadow-2xs">
                           {selectedTicket.ticket_number}
                         </span>
                         {getStatusBadge(selectedTicket.status)}
                         {getPriorityBadge(selectedTicket.priority)}
-                        <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
+                        <span className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">
                           Kategori: {selectedTicket.category}
                         </span>
                       </div>
-                      <h2 className="text-xl font-bold text-zinc-900">{selectedTicket.subject}</h2>
-                      <p className="text-xs text-zinc-400">
+                      <h2 className="text-lg sm:text-xl font-bold text-slate-900">{selectedTicket.subject}</h2>
+                      <p className="text-xs text-slate-400">
                         Dibuat pada {formatDate(selectedTicket.created_at)}
                       </p>
                     </div>
 
                     <button
                       onClick={() => fetchTicketDetails(selectedTicket.id)}
-                      className="p-2 text-zinc-400 hover:text-zinc-600 rounded-lg hover:bg-zinc-200/50 transition self-start md:self-center"
+                      className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-200/60 transition-colors self-start md:self-center border border-slate-200/60 bg-white shadow-2xs cursor-pointer"
                       title="Perbarui percakapan"
                     >
                       <RefreshCwIcon className={`w-4 h-4 ${ticketDetailsLoading ? 'animate-spin' : ''}`} />
@@ -593,22 +702,22 @@ export default function OwnerSupport({ user, token }) {
                   </div>
 
                   {/* Messages Timeline */}
-                  <div className="p-6 space-y-4 max-h-[500px] overflow-y-auto bg-zinc-50/30">
+                  <div className="p-5 sm:p-6 space-y-4 max-h-[520px] overflow-y-auto bg-slate-50/30">
                     {/* Initial User Description Card */}
                     <div className="flex gap-3 items-start">
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs flex-shrink-0">
-                        U
+                      <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                        {user?.name?.charAt(0) || user?.full_name?.charAt(0) || 'U'}
                       </div>
-                      <div className="flex-1 bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm space-y-2">
+                      <div className="flex-1 bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xs space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-zinc-900">
-                            {user?.name || 'Anda'} (Pembuka Tiket)
+                          <span className="text-xs font-bold text-slate-900">
+                            {user?.name || user?.full_name || 'Anda'} (Pembuka Tiket)
                           </span>
-                          <span className="text-xs text-zinc-400">
+                          <span className="text-[11px] text-slate-400">
                             {formatDate(selectedTicket.created_at)}
                           </span>
                         </div>
-                        <p className="text-sm text-zinc-700 whitespace-pre-wrap">
+                        <p className="text-xs sm:text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
                           {selectedTicket.description}
                         </p>
                         {selectedTicket.attachment_url && (
@@ -617,10 +726,11 @@ export default function OwnerSupport({ user, token }) {
                               href={selectedTicket.attachment_url}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 text-xs text-emerald-600 hover:underline bg-emerald-50 px-2.5 py-1 rounded-md"
+                              className="inline-flex items-center gap-1.5 text-xs text-slate-800 hover:text-slate-950 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg transition-colors font-medium"
                             >
-                              <PaperclipIcon className="w-3.5 h-3.5" />
-                              <span>Lihat Lampiran</span>
+                              <PaperclipIcon className="w-3.5 h-3.5 text-slate-500" />
+                              <span>Lihat Lampiran Berkas</span>
+                              <ExternalLinkIcon className="w-3 h-3 text-slate-400" />
                             </a>
                           </div>
                         )}
@@ -639,36 +749,36 @@ export default function OwnerSupport({ user, token }) {
                             }`}
                           >
                             <div
-                              className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${
+                              className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 shadow-xs ${
                                 isSupport
-                                  ? 'bg-blue-600 text-white shadow-sm'
-                                  : 'bg-emerald-100 text-emerald-700'
+                                  ? 'bg-slate-900 text-white'
+                                  : 'bg-slate-200 text-slate-800'
                               }`}
                             >
                               {isSupport ? 'K' : 'U'}
                             </div>
 
                             <div
-                              className={`max-w-xl rounded-2xl p-4 shadow-sm space-y-1.5 ${
+                              className={`max-w-xl rounded-2xl p-4 shadow-2xs space-y-1.5 ${
                                 isSupport
-                                  ? 'bg-blue-50/70 border border-blue-200/80 text-zinc-900'
-                                  : 'bg-white border border-zinc-200 text-zinc-900'
+                                  ? 'bg-white border border-slate-200/90 text-slate-900'
+                                  : 'bg-slate-900 text-white'
                               }`}
                             >
                               <div className="flex items-center justify-between gap-4">
-                                <span className="text-xs font-bold flex items-center gap-1.5">
+                                <span className={`text-xs font-bold flex items-center gap-1.5 ${isSupport ? 'text-slate-900' : 'text-white'}`}>
                                   {msg.sender_name}
                                   {isSupport && (
-                                    <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.2 rounded font-semibold uppercase tracking-wider">
-                                      Official
+                                    <span className="text-[10px] bg-slate-900 text-white px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">
+                                      Klikin Support
                                     </span>
                                   )}
                                 </span>
-                                <span className="text-[11px] text-zinc-400">
+                                <span className={`text-[11px] ${isSupport ? 'text-slate-400' : 'text-slate-300'}`}>
                                   {formatDate(msg.created_at)}
                                 </span>
                               </div>
-                              <p className="text-sm whitespace-pre-wrap text-zinc-700">
+                              <p className={`text-xs sm:text-sm whitespace-pre-wrap leading-relaxed ${isSupport ? 'text-slate-700' : 'text-slate-100'}`}>
                                 {msg.message}
                               </p>
                               {msg.attachment_url && (
@@ -677,10 +787,15 @@ export default function OwnerSupport({ user, token }) {
                                     href={msg.attachment_url}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:underline bg-white/80 px-2.5 py-1 rounded-md border border-blue-100"
+                                    className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border font-medium ${
+                                      isSupport
+                                        ? 'text-slate-800 bg-slate-50 border-slate-200 hover:bg-slate-100'
+                                        : 'text-white bg-white/10 border-white/20 hover:bg-white/20'
+                                    }`}
                                   >
                                     <PaperclipIcon className="w-3.5 h-3.5" />
                                     <span>Lampiran Berkas</span>
+                                    <ExternalLinkIcon className="w-3 h-3 opacity-70" />
                                   </a>
                                 </div>
                               )}
@@ -690,10 +805,10 @@ export default function OwnerSupport({ user, token }) {
                       })}
                   </div>
 
-                  {/* Reply Box */}
+                  {/* Reply Form */}
                   {selectedTicket.status !== 'closed' ? (
-                    <form onSubmit={handleSendReply} className="p-4 sm:p-6 bg-white border-t border-zinc-200">
-                      <label className="block text-xs font-semibold text-zinc-700 mb-2">
+                    <form onSubmit={handleSendReply} className="p-4 sm:p-6 bg-white border-t border-slate-200">
+                      <label className="block text-xs font-bold text-slate-900 mb-2">
                         Tuliskan Pesan Balasan Anda:
                       </label>
                       <textarea
@@ -701,101 +816,145 @@ export default function OwnerSupport({ user, token }) {
                         onChange={(e) => setReplyMessage(e.target.value)}
                         placeholder="Ketik rincian atau jawaban tambahan di sini..."
                         rows={3}
-                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-800 placeholder-zinc-400"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 text-xs sm:text-sm text-slate-800 placeholder-slate-400 transition-all resize-none"
                         required
                       />
 
                       <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-2 flex-1">
-                          <PaperclipIcon className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                          <PaperclipIcon className="w-4 h-4 text-slate-400 shrink-0" />
                           <input
                             type="url"
                             value={replyAttachment}
                             onChange={(e) => setReplyAttachment(e.target.value)}
-                            placeholder="Tautan lampiran / screenshot (opsional, misal Google Drive / Imgur)"
-                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-zinc-700"
+                            placeholder="Tautan lampiran / screenshot (Google Drive, Imgur, Dropbox)"
+                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-900 text-slate-700 placeholder-slate-400"
                           />
                         </div>
 
                         <button
                           type="submit"
                           disabled={sendingReply || !replyMessage.trim()}
-                          className="px-5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
+                          className="px-5 py-2.5 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-xs cursor-pointer active:scale-98"
                         >
                           {sendingReply ? (
-                            <RefreshCwIcon className="w-4 h-4 animate-spin" />
+                            <RefreshCwIcon className="w-3.5 h-3.5 animate-spin" />
                           ) : (
-                            <SendIcon className="w-4 h-4" />
+                            <SendIcon className="w-3.5 h-3.5" />
                           )}
                           <span>Kirim Balasan</span>
                         </button>
                       </div>
                     </form>
                   ) : (
-                    <div className="p-4 bg-zinc-100 text-center text-xs text-zinc-500 font-medium">
-                      Tiket ini telah ditutup. Untuk masalah baru, silakan buka tiket baru.
+                    <div className="p-4 bg-slate-50 border-t border-slate-200 text-center text-xs text-slate-500 font-medium">
+                      Tiket ini telah selesai dan ditutup. Untuk pertanyaan baru, silakan buka tiket baru.
                     </div>
                   )}
                 </div>
               ) : (
-                /* Ticket List */
-                <div className="bg-white border border-zinc-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100">
+                /* Ticket List Card */
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-7 shadow-xs space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
                     <div>
-                      <h2 className="text-lg font-bold text-zinc-900">Riwayat Tiket Dukungan Anda</h2>
-                      <p className="text-xs text-zinc-500">
-                        Semua komunikasi resmi dengan tim teknis dan operasional Klikin tersimpan rapi di sini.
+                      <h2 className="text-base sm:text-lg font-bold text-slate-900">Riwayat Tiket Dukungan Anda</h2>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Semua komunikasi resmi dengan tim teknis dan spesialis Klikin tersimpan aman di sini.
                       </p>
                     </div>
 
                     <button
                       onClick={() => setShowNewTicketModal(true)}
-                      className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition shadow-sm flex items-center gap-2 self-start sm:self-auto"
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition-all shadow-xs flex items-center gap-2 self-start sm:self-auto active:scale-98 cursor-pointer"
                     >
-                      <MessageCircleIcon className="w-4 h-4" />
+                      <MessageCircleIcon className="w-3.5 h-3.5" />
                       <span>Buat Tiket Baru</span>
                     </button>
                   </div>
 
-                  {tickets.length === 0 ? (
+                  {/* Search & Filter Bar */}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="relative flex-1">
+                      <SearchIcon className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={ticketSearch}
+                        onChange={(e) => setTicketSearch(e.target.value)}
+                        placeholder="Cari nomor tiket atau topik kendala..."
+                        className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 text-xs text-slate-800 placeholder-slate-400"
+                      />
+                      {ticketSearch && (
+                        <button
+                          onClick={() => setTicketSearch('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-700 font-semibold"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200/60 shrink-0">
+                      {[
+                        { id: 'all', label: 'Semua Status' },
+                        { id: 'active', label: 'Aktif' },
+                        { id: 'closed', label: 'Selesai' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => setTicketFilterStatus(item.id)}
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                            ticketFilterStatus === item.id
+                              ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/80'
+                              : 'text-slate-500 hover:text-slate-900'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {filteredTickets.length === 0 ? (
                     <div className="text-center py-12 space-y-3">
-                      <div className="w-14 h-14 rounded-2xl bg-zinc-100 text-zinc-400 mx-auto flex items-center justify-center">
-                        <LifeBuoyIcon className="w-7 h-7" />
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center border border-slate-200/60 shadow-2xs">
+                        <LifeBuoyIcon className="w-6 h-6" />
                       </div>
-                      <h3 className="font-semibold text-zinc-800 text-sm">Belum Ada Tiket Bantuan</h3>
-                      <p className="text-xs text-zinc-400 max-w-sm mx-auto">
-                        Jika Anda mengalami kendala teknis atau memiliki pertanyaan seputar akun, jangan ragu untuk membuat tiket bantuan baru.
+                      <h3 className="font-bold text-slate-900 text-sm">Tidak Ada Tiket Ditemukan</h3>
+                      <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                        {ticketSearch
+                          ? 'Tidak ada tiket yang cocok dengan kata kunci pencarian Anda.'
+                          : 'Jika Anda mengalami kendala teknis atau memiliki pertanyaan, klik tombol "Buat Tiket Baru" di atas.'}
                       </p>
                     </div>
                   ) : (
-                    <div className="divide-y divide-zinc-100">
-                      {tickets.map((tkt) => (
+                    <div className="divide-y divide-slate-100">
+                      {filteredTickets.map((tkt) => (
                         <div
                           key={tkt.id}
                           onClick={() => fetchTicketDetails(tkt.id)}
-                          className="py-4 hover:bg-zinc-50/80 -mx-4 px-4 rounded-xl cursor-pointer transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                          className="py-4 px-3 -mx-3 rounded-xl hover:bg-slate-50/80 cursor-pointer transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
                         >
-                          <div className="space-y-1.5 flex-1">
+                          <div className="space-y-1.5 flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">
+                              <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
                                 {tkt.ticket_number}
                               </span>
                               {getStatusBadge(tkt.status)}
                               {getPriorityBadge(tkt.priority)}
-                              <span className="text-xs text-zinc-400">
-                                Ditutup/Diperbarui: {formatDate(tkt.updated_at || tkt.created_at)}
+                              <span className="text-[11px] text-slate-400">
+                                Diperbarui: {formatDate(tkt.updated_at || tkt.created_at)}
                               </span>
                             </div>
-                            <h4 className="text-sm font-bold text-zinc-900 hover:text-emerald-600 transition">
+                            <h4 className="text-sm font-bold text-slate-900 group-hover:text-slate-950 transition-colors">
                               {tkt.subject}
                             </h4>
-                            <p className="text-xs text-zinc-500 line-clamp-1">
+                            <p className="text-xs text-slate-500 line-clamp-1">
                               {tkt.description}
                             </p>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-xs font-bold text-slate-700 group-hover:text-slate-950 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
                               Buka Percakapan &rarr;
                             </span>
                           </div>
@@ -812,28 +971,28 @@ export default function OwnerSupport({ user, token }) {
           {activeTab === 'faq' && (
             <div className="space-y-6">
               {/* FAQ Search & Category Filters */}
-              <div className="bg-white border border-zinc-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-7 shadow-xs space-y-5">
                 <div>
-                  <h2 className="text-lg font-bold text-zinc-900">Pertanyaan yang Sering Diajukan (FAQ)</h2>
-                  <p className="text-xs text-zinc-500">
-                    Temukan jawaban cepat mengenai konfigurasi domain, pembayaran, leads, dan fitur halaman Klikin Anda.
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900">Pertanyaan yang Sering Diajukan (FAQ)</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Solusi instan dan petunjuk teknis mengenai domain, pembayaran, leads, pixel tracking, dan kustomisasi Klikin.
                   </p>
                 </div>
 
                 {/* Search Bar */}
                 <div className="relative">
-                  <SearchIcon className="w-5 h-5 text-zinc-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                  <SearchIcon className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={faqSearch}
                     onChange={(e) => setFaqSearch(e.target.value)}
-                    placeholder="Cari kata kunci, misal: 'DNS', 'Stripe', 'Pixel', 'Password'..."
-                    className="w-full pl-12 pr-4 py-3 rounded-2xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-800 placeholder-zinc-400"
+                    placeholder="Cari pertanyaan, misal: 'CNAME', 'Stripe', 'Meta Pixel', 'Password'..."
+                    className="w-full pl-10 pr-16 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 text-xs sm:text-sm text-slate-800 placeholder-slate-400"
                   />
                   {faqSearch && (
                     <button
                       onClick={() => setFaqSearch('')}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-zinc-600 font-semibold"
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-700 font-semibold"
                     >
                       Reset
                     </button>
@@ -846,10 +1005,10 @@ export default function OwnerSupport({ user, token }) {
                     <button
                       key={cat.id}
                       onClick={() => setSelectedFaqCategory(cat.id)}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                         selectedFaqCategory === cat.id
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
                       }`}
                     >
                       {cat.label}
@@ -859,50 +1018,50 @@ export default function OwnerSupport({ user, token }) {
               </div>
 
               {/* FAQ Accordion List */}
-              <div className="bg-white border border-zinc-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-7 shadow-xs space-y-3">
                 {filteredFaqs.length === 0 ? (
                   <div className="text-center py-10 space-y-2">
-                    <p className="text-zinc-500 text-sm font-medium">Tidak ada FAQ yang cocok dengan pencarian Anda.</p>
+                    <p className="text-slate-500 text-xs font-medium">Tidak ada FAQ yang cocok dengan pencarian Anda.</p>
                     <button
                       onClick={() => {
                         setFaqSearch('');
                         setSelectedFaqCategory('all');
                       }}
-                      className="text-xs font-semibold text-emerald-600 hover:underline"
+                      className="text-xs font-bold text-slate-900 hover:underline"
                     >
                       Tampilkan semua pertanyaan
                     </button>
                   </div>
                 ) : (
-                  <div className="divide-y divide-zinc-100">
+                  <div className="divide-y divide-slate-100">
                     {filteredFaqs.map((faq) => {
                       const isExpanded = expandedFaqId === faq.id;
                       return (
                         <div key={faq.id} className="py-4">
                           <button
                             onClick={() => setExpandedFaqId(isExpanded ? null : faq.id)}
-                            className="w-full text-left flex items-start justify-between gap-4 group"
+                            className="w-full text-left flex items-start justify-between gap-4 group cursor-pointer"
                           >
                             <div className="space-y-1">
-                              <span className="text-[11px] font-semibold tracking-wider uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+                              <span className="text-[10px] font-bold tracking-wider uppercase text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60">
                                 {faq.category}
                               </span>
-                              <h3 className="text-sm sm:text-base font-bold text-zinc-900 group-hover:text-emerald-600 transition">
+                              <h3 className="text-sm font-bold text-slate-900 group-hover:text-slate-950 transition-colors">
                                 {faq.question}
                               </h3>
                             </div>
                             <ChevronDownIcon
-                              className={`w-5 h-5 text-zinc-400 group-hover:text-zinc-600 flex-shrink-0 transition-transform ${
-                                isExpanded ? 'rotate-180 text-emerald-600' : ''
+                              className={`w-4 h-4 text-slate-400 group-hover:text-slate-700 shrink-0 transition-transform duration-200 ${
+                                isExpanded ? 'rotate-180 text-slate-900' : ''
                               }`}
                             />
                           </button>
 
                           {isExpanded && (
-                            <div className="mt-3 pl-1 pr-4 text-sm text-zinc-600 leading-relaxed animate-in fade-in duration-200">
-                              <p className="bg-zinc-50 p-4 rounded-2xl border border-zinc-100 whitespace-pre-wrap">
+                            <div className="mt-3 pl-1 pr-4 text-xs sm:text-sm text-slate-600 leading-relaxed animate-in fade-in duration-150">
+                              <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200/70 whitespace-pre-wrap leading-relaxed">
                                 {faq.answer}
-                              </p>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -916,130 +1075,163 @@ export default function OwnerSupport({ user, token }) {
 
           {/* TAB 3: CONTACT FORM */}
           {activeTab === 'contact' && (
-            <div className="bg-white border border-zinc-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6 max-w-3xl">
-              <div>
-                <h2 className="text-lg font-bold text-zinc-900">Hubungi Tim Klikin</h2>
-                <p className="text-xs text-zinc-500">
-                  Untuk pertanyaan kemitraan, pertanyaan umum, atau keluhan khusus yang tidak memerlukan pelacakan tiket.
-                </p>
-              </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column: Form */}
+              <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-7 shadow-xs space-y-5">
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900">Hubungi Tim Resmi Klikin</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Gunakan formulir ini untuk pertanyaan kemitraan, pertanyaan umum, atau konsultasi bisnis yang tidak memerlukan tiket pelacakan teknis.
+                  </p>
+                </div>
 
-              <form onSubmit={handleSubmitContact} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <form onSubmit={handleSubmitContact} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-900 mb-1.5">
+                        Nama Lengkap
+                      </label>
+                      <input
+                        type="text"
+                        value={contactForm.name}
+                        onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 text-xs sm:text-sm text-slate-800"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-900 mb-1.5">
+                        Alamat Email
+                      </label>
+                      <input
+                        type="email"
+                        value={contactForm.email}
+                        onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 text-xs sm:text-sm text-slate-800"
+                        required
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
-                      Nama Lengkap
+                    <label className="block text-xs font-bold text-slate-900 mb-1.5">
+                      Subjek Pertanyaan
                     </label>
                     <input
                       type="text"
-                      value={contactForm.name}
-                      onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-800"
+                      value={contactForm.subject}
+                      onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
+                      placeholder="Contoh: Kerja sama komunitas kreator atau pertanyaan integrasi khusus"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 text-xs sm:text-sm text-slate-800"
                       required
                     />
                   </div>
+
                   <div>
-                    <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
-                      Alamat Email
+                    <label className="block text-xs font-bold text-slate-900 mb-1.5">
+                      Isi Pesan
                     </label>
-                    <input
-                      type="email"
-                      value={contactForm.email}
-                      onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-800"
+                    <textarea
+                      value={contactForm.message}
+                      onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
+                      placeholder="Jelaskan kebutuhan atau pertanyaan Anda secara rinci..."
+                      rows={5}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 text-xs sm:text-sm text-slate-800 resize-none"
                       required
                     />
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
-                    Subjek Pertanyaan
-                  </label>
-                  <input
-                    type="text"
-                    value={contactForm.subject}
-                    onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
-                    placeholder="Contoh: Pertanyaan seputar integrasi API atau kerja sama brand"
-                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-800"
-                    required
-                  />
-                </div>
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      disabled={submittingContact}
+                      className="px-6 py-2.5 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition-all disabled:opacity-50 flex items-center gap-2 shadow-xs cursor-pointer active:scale-98"
+                    >
+                      {submittingContact ? (
+                        <RefreshCwIcon className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <SendIcon className="w-3.5 h-3.5" />
+                      )}
+                      <span>Kirim Pesan Kontak</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
-                    Isi Pesan
-                  </label>
-                  <textarea
-                    value={contactForm.message}
-                    onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-                    placeholder="Jelaskan secara mendalam pertanyaan Anda..."
-                    rows={5}
-                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-800"
-                    required
-                  />
-                </div>
+              {/* Right Column: Fast Channel Info */}
+              <div className="space-y-4">
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900">Saluran Langsung</h3>
+                  <div className="space-y-3 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60 space-y-1">
+                      <div className="flex items-center gap-2 font-bold text-slate-900">
+                        <MailIcon className="w-3.5 h-3.5 text-slate-700" />
+                        <span>Email Resmi</span>
+                      </div>
+                      <p className="text-slate-500 font-mono text-[11px]">support@klikin.id</p>
+                    </div>
 
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    disabled={submittingContact}
-                    className="px-6 py-2.5 rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-50 flex items-center gap-2 shadow-sm"
-                  >
-                    {submittingContact ? (
-                      <RefreshCwIcon className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <SendIcon className="w-4 h-4" />
-                    )}
-                    <span>Kirim Pesan Kontak</span>
-                  </button>
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60 space-y-1">
+                      <div className="flex items-center gap-2 font-bold text-slate-900">
+                        <MessageCircleIcon className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>WhatsApp Care</span>
+                      </div>
+                      <p className="text-slate-500 text-[11px]">Senin – Minggu (08.00 – 22.00 WIB)</p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60 space-y-1">
+                      <div className="flex items-center gap-2 font-bold text-slate-900">
+                        <ShieldCheckIcon className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Keamanan Data</span>
+                      </div>
+                      <p className="text-slate-500 text-[11px]">Privasi data akun dilindungi protokol kepatuhan UU PDP.</p>
+                    </div>
+                  </div>
                 </div>
-              </form>
+              </div>
             </div>
           )}
 
           {/* TAB 4: FEATURE FEEDBACK */}
           {activeTab === 'feedback' && (
-            <div className="bg-white border border-zinc-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6 max-w-3xl">
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-7 shadow-xs space-y-5 max-w-3xl">
               <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 text-amber-800 text-xs font-semibold mb-2">
-                  <SparklesIcon className="w-3.5 h-3.5" />
-                  <span>Product Roadmap & Feedback</span>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200/80 text-[11px] font-semibold text-slate-700 mb-2">
+                  <SparklesIcon className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Roadmap Produk & Masukan</span>
                 </div>
-                <h2 className="text-lg font-bold text-zinc-900">Kirim Ide & Saran Fitur Baru</h2>
-                <p className="text-xs text-zinc-500">
-                  Klikin dibangun untuk Anda. Bantu kami menyempurnakan platform dengan membagikan ide-ide kreatif dan pengalaman Anda.
+                <h2 className="text-base sm:text-lg font-bold text-slate-900">Kirim Ide & Saran Fitur Baru</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Klikin dibangun bersama Anda. Setiap saran fitur akan dipertimbangkan langsung oleh tim produk dalam sprint mingguan kami.
                 </p>
               </div>
 
               <form onSubmit={handleSubmitFeedback} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-900 mb-1.5">
                       Judul Ide / Permintaan Fitur
                     </label>
                     <input
                       type="text"
                       value={feedbackForm.title}
                       onChange={(e) => setFeedbackForm({ ...feedbackForm, title: e.target.value })}
-                      placeholder="Misal: Tambah opsi QR Code custom dengan logo"
-                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-800"
+                      placeholder="Misal: QR Code custom dengan logo pribadi"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 text-xs sm:text-sm text-slate-800"
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-zinc-700 mb-1.5 flex items-center justify-between">
-                      <span>Kategori Ide / Masukan</span>
-                      <span className="text-[10px] text-zinc-400 font-normal">Pilih jenis saran</span>
+                    <label className="block text-xs font-bold text-slate-900 mb-1.5">
+                      Kategori Saran
                     </label>
                     <div className="flex flex-wrap gap-1.5">
                       {[
                         { id: 'Fitur Baru', label: 'Fitur Baru', icon: SparklesIcon },
-                        { id: 'Desain & UI/UX', label: 'Desain & UI/UX', icon: PaletteIcon },
+                        { id: 'Desain & UI/UX', label: 'Desain & UI', icon: PaletteIcon },
                         { id: 'Integrasi', label: 'Integrasi API', icon: ZapIcon },
                         { id: 'Kinerja & Kecepatan', label: 'Kinerja', icon: ClockIcon },
-                        { id: 'Lainnya', label: 'Lainnya', icon: HelpCircleIcon },
                       ].map((item) => {
                         const isSelected = feedbackForm.category === item.id;
                         const ItemIcon = item.icon;
@@ -1048,10 +1240,10 @@ export default function OwnerSupport({ user, token }) {
                             key={item.id}
                             type="button"
                             onClick={() => setFeedbackForm({ ...feedbackForm, category: item.id })}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all duration-150 border ${
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all border cursor-pointer ${
                               isSelected
-                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                                : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50'
+                                ? 'bg-slate-900 text-white border-slate-900 shadow-2xs font-semibold'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
                             }`}
                           >
                             <ItemIcon className="w-3.5 h-3.5" />
@@ -1064,23 +1256,23 @@ export default function OwnerSupport({ user, token }) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                  <label className="block text-xs font-bold text-slate-900 mb-1.5">
                     Rincian Kebutuhan & Ekspektasi Anda
                   </label>
                   <textarea
                     value={feedbackForm.description}
                     onChange={(e) => setFeedbackForm({ ...feedbackForm, description: e.target.value })}
-                    placeholder="Ceritakan bagaimana fitur ini akan mempermudah alur kerja Anda..."
+                    placeholder="Ceritakan bagaimana fitur ini akan mempermudah alur kerja bisnis Anda..."
                     rows={4}
-                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-800"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 text-xs sm:text-sm text-slate-800 resize-none"
                     required
                   />
                 </div>
 
                 {/* Star Rating */}
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
-                    Tingkat Kepuasan Anda Terhadap Platform Klikin Saat Ini (1-5 Bintang)
+                  <label className="block text-xs font-bold text-slate-900 mb-1.5">
+                    Tingkat Kepuasan Anda Terhadap Platform Klikin
                   </label>
                   <div className="flex items-center gap-1.5 pt-1">
                     {[1, 2, 3, 4, 5].map((star) => (
@@ -1088,15 +1280,15 @@ export default function OwnerSupport({ user, token }) {
                         key={star}
                         type="button"
                         onClick={() => setFeedbackForm({ ...feedbackForm, rating: star })}
-                        className="p-1 rounded hover:scale-110 transition text-amber-400 focus:outline-none"
+                        className="p-1 rounded-md hover:scale-110 transition-transform text-amber-400 focus:outline-none cursor-pointer"
                       >
                         <StarIcon
-                          className="w-6 h-6"
+                          className="w-5 h-5"
                           filled={star <= feedbackForm.rating}
                         />
                       </button>
                     ))}
-                    <span className="text-xs font-semibold text-zinc-500 ml-2">
+                    <span className="text-xs font-bold text-slate-700 ml-2">
                       {feedbackForm.rating} dari 5 Bintang
                     </span>
                   </div>
@@ -1106,14 +1298,14 @@ export default function OwnerSupport({ user, token }) {
                   <button
                     type="submit"
                     disabled={submittingFeedback}
-                    className="px-6 py-2.5 rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-50 flex items-center gap-2 shadow-sm"
+                    className="px-6 py-2.5 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition-all disabled:opacity-50 flex items-center gap-2 shadow-xs cursor-pointer active:scale-98"
                   >
                     {submittingFeedback ? (
-                      <RefreshCwIcon className="w-4 h-4 animate-spin" />
+                      <RefreshCwIcon className="w-3.5 h-3.5 animate-spin" />
                     ) : (
-                      <SparklesIcon className="w-4 h-4" />
+                      <SparklesIcon className="w-3.5 h-3.5" />
                     )}
-                    <span>Kirim Masukan Anda</span>
+                    <span>Kirim Saran Anda</span>
                   </button>
                 </div>
               </form>
@@ -1124,18 +1316,21 @@ export default function OwnerSupport({ user, token }) {
 
       {/* MODAL: Buka Tiket Baru */}
       {showNewTicketModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl space-y-6 relative">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5 relative">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-800 border border-slate-200/80 flex items-center justify-center font-bold shadow-2xs">
                   <LifeBuoyIcon className="w-4 h-4" />
                 </div>
-                <h3 className="text-lg font-bold text-zinc-900">Buka Tiket Bantuan Baru</h3>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Buka Tiket Bantuan Baru</h3>
+                  <p className="text-[11px] text-slate-400">Tim teknis Klikin akan merespon segera</p>
+                </div>
               </div>
               <button
                 onClick={() => setShowNewTicketModal(false)}
-                className="text-zinc-400 hover:text-zinc-600 text-sm font-semibold p-1"
+                className="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
               >
                 &times;
               </button>
@@ -1143,15 +1338,15 @@ export default function OwnerSupport({ user, token }) {
 
             <form onSubmit={handleCreateTicket} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                <label className="block text-xs font-bold text-slate-900 mb-1.5">
                   Subjek Permasalahan / Kendala
                 </label>
                 <input
                   type="text"
                   value={newTicket.subject}
                   onChange={(e) => setNewTicket({ ...newTicket, subject: e.target.value })}
-                  placeholder="Misal: Kendala Verifikasi DNS Custom Domain"
-                  className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-800"
+                  placeholder="Misal: Verifikasi DNS Custom Domain Tidak Selesai"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 text-xs sm:text-sm text-slate-800"
                   required
                 />
               </div>
@@ -1159,17 +1354,16 @@ export default function OwnerSupport({ user, token }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Kategori Kendala - Custom Interactive Dropdown */}
                 <div className="relative">
-                  <label className="block text-xs font-semibold text-zinc-700 mb-1.5 flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-900 mb-1.5 flex items-center justify-between">
                     <span>Kategori Kendala</span>
-                    <span className="text-[10px] text-zinc-400 font-normal">Topik masalah</span>
                   </label>
                   <button
                     type="button"
                     onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
-                    className={`w-full px-3.5 py-2.5 rounded-xl border text-left bg-white flex items-center justify-between transition-all duration-200 shadow-sm ${
+                    className={`w-full px-3 py-2 rounded-xl border text-left bg-white flex items-center justify-between transition-all shadow-2xs cursor-pointer ${
                       categoryDropdownOpen
-                        ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
-                        : 'border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50'
+                        ? 'border-slate-900 ring-2 ring-slate-900/10'
+                        : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     {(() => {
@@ -1177,18 +1371,17 @@ export default function OwnerSupport({ user, token }) {
                       const IconComp = sel.icon;
                       return (
                         <>
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center border flex-shrink-0 ${sel.color}`}>
-                              <IconComp className="w-3.5 h-3.5" />
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center border shrink-0 ${sel.color}`}>
+                              <IconComp className="w-3 h-3" />
                             </div>
                             <div className="truncate">
-                              <p className="text-xs font-bold text-zinc-900 truncate leading-snug">{sel.label}</p>
-                              <p className="text-[10px] text-zinc-400 truncate">{sel.badge}</p>
+                              <p className="text-xs font-bold text-slate-900 truncate leading-snug">{sel.label}</p>
                             </div>
                           </div>
                           <ChevronDownIcon
-                            className={`w-4 h-4 text-zinc-400 flex-shrink-0 transition-transform duration-200 ${
-                              categoryDropdownOpen ? 'rotate-180 text-emerald-600' : ''
+                            className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
+                              categoryDropdownOpen ? 'rotate-180 text-slate-900' : ''
                             }`}
                           />
                         </>
@@ -1203,7 +1396,7 @@ export default function OwnerSupport({ user, token }) {
                         className="fixed inset-0 z-20"
                         onClick={() => setCategoryDropdownOpen(false)}
                       />
-                      <div className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-2xl border border-zinc-200 shadow-2xl py-1.5 z-30 animate-in fade-in zoom-in-95 duration-150 max-h-64 overflow-y-auto">
+                      <div className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-xl border border-slate-200 shadow-xl py-1 z-30 max-h-56 overflow-y-auto animate-in fade-in duration-100">
                         {TICKET_CATEGORIES.map((cat) => {
                           const isSelected = newTicket.category === cat.id;
                           const CatIcon = cat.icon;
@@ -1215,21 +1408,19 @@ export default function OwnerSupport({ user, token }) {
                                 setNewTicket({ ...newTicket, category: cat.id });
                                 setCategoryDropdownOpen(false);
                               }}
-                              className={`w-full px-3.5 py-2.5 text-left flex items-center gap-2.5 transition-colors ${
-                                isSelected ? 'bg-emerald-50/80 text-emerald-950 font-semibold' : 'hover:bg-zinc-50 text-zinc-700'
+                              className={`w-full px-3 py-2 text-left flex items-center gap-2.5 transition-colors cursor-pointer ${
+                                isSelected ? 'bg-slate-100 text-slate-950 font-bold' : 'hover:bg-slate-50 text-slate-700'
                               }`}
                             >
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center border flex-shrink-0 ${cat.color}`}>
-                                <CatIcon className="w-3.5 h-3.5" />
+                              <div className={`w-6 h-6 rounded-lg flex items-center justify-center border shrink-0 ${cat.color}`}>
+                                <CatIcon className="w-3 h-3" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-semibold text-zinc-900 truncate">{cat.label}</span>
-                                </div>
-                                <p className="text-[10px] text-zinc-400 truncate">{cat.desc}</p>
+                                <p className="text-xs font-semibold text-slate-900 truncate">{cat.label}</p>
+                                <p className="text-[10px] text-slate-400 truncate">{cat.desc}</p>
                               </div>
                               {isSelected && (
-                                <CheckIcon className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                                <CheckIcon className="w-3.5 h-3.5 text-slate-900 shrink-0" />
                               )}
                             </button>
                           );
@@ -1239,13 +1430,12 @@ export default function OwnerSupport({ user, token }) {
                   )}
                 </div>
 
-                {/* Prioritas Kendala - Segmented Visual Cards */}
+                {/* Prioritas Kendala */}
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-700 mb-1.5 flex items-center justify-between">
-                    <span>Prioritas Kendala</span>
-                    <span className="text-[10px] text-zinc-400 font-normal">Tingkat urgensi</span>
+                  <label className="block text-xs font-bold text-slate-900 mb-1.5">
+                    Prioritas Kendala
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5">
                     {TICKET_PRIORITIES.map((pri) => {
                       const isSelected = newTicket.priority === pri.id;
                       return (
@@ -1253,24 +1443,24 @@ export default function OwnerSupport({ user, token }) {
                           key={pri.id}
                           type="button"
                           onClick={() => setNewTicket({ ...newTicket, priority: pri.id })}
-                          className={`p-2 rounded-xl border text-left transition-all duration-150 flex flex-col justify-between relative ${
+                          className={`p-2 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
                             isSelected
-                              ? `${pri.activeClass} shadow-sm`
-                              : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/50 text-zinc-700'
+                              ? `${pri.activeClass} shadow-2xs`
+                              : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center justify-between mb-1">
                             <span className="relative flex h-2 w-2">
                               {pri.pulsing && isSelected && (
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                               )}
                               <span className={`relative inline-flex rounded-full h-2 w-2 ${pri.dot}`}></span>
                             </span>
-                            {isSelected && <CheckIcon className="w-3 h-3 text-emerald-600" />}
+                            {isSelected && <CheckIcon className="w-3 h-3 text-slate-900" />}
                           </div>
                           <div>
-                            <p className="text-xs font-bold leading-tight">{pri.label}</p>
-                            <p className="text-[9px] text-zinc-400 truncate mt-0.5">{pri.sub}</p>
+                            <p className="text-[11px] font-bold leading-tight">{pri.label}</p>
+                            <p className="text-[9px] text-slate-400 truncate mt-0.5">{pri.sub}</p>
                           </div>
                         </button>
                       );
@@ -1280,52 +1470,52 @@ export default function OwnerSupport({ user, token }) {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                <label className="block text-xs font-bold text-slate-900 mb-1.5">
                   Deskripsi Lengkap Masalah
                 </label>
                 <textarea
                   value={newTicket.description}
                   onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })}
-                  placeholder="Jelaskan secara kronologis apa yang terjadi, browser yang digunakan, dan langkah yang sudah Anda coba..."
+                  placeholder="Jelaskan secara kronologis apa yang terjadi, browser yang digunakan, dan langkah yang sudah dicoba..."
                   rows={4}
-                  className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-800"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 text-xs sm:text-sm text-slate-800 resize-none"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                <label className="block text-xs font-bold text-slate-900 mb-1.5">
                   Lampiran Berkas / Screenshot (URL)
                 </label>
                 <div className="flex items-center gap-2">
-                  <PaperclipIcon className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                  <PaperclipIcon className="w-4 h-4 text-slate-400 shrink-0" />
                   <input
                     type="url"
                     value={newTicket.attachment_url}
                     onChange={(e) => setNewTicket({ ...newTicket, attachment_url: e.target.value })}
                     placeholder="https://imgur.com/..., https://drive.google.com/..."
-                    className="w-full px-4 py-2 rounded-xl border border-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs text-zinc-800"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-900 text-xs text-slate-800 placeholder-slate-400"
                   />
                 </div>
               </div>
 
-              <div className="pt-3 flex items-center justify-end gap-3 border-t border-zinc-100">
+              <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowNewTicketModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-600 hover:bg-zinc-100 transition"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={creatingTicket}
-                  className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-50 flex items-center gap-2 shadow-md"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition-all disabled:opacity-50 flex items-center gap-2 shadow-xs cursor-pointer active:scale-98"
                 >
                   {creatingTicket ? (
-                    <RefreshCwIcon className="w-4 h-4 animate-spin" />
+                    <RefreshCwIcon className="w-3.5 h-3.5 animate-spin" />
                   ) : (
-                    <SendIcon className="w-4 h-4" />
+                    <SendIcon className="w-3.5 h-3.5" />
                   )}
                   <span>Kirim Tiket Sekarang</span>
                 </button>

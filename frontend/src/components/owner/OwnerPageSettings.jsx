@@ -14,8 +14,8 @@ import {
   EyeIcon,
   EyeOffIcon,
 } from '../Icons';
-
-const API_BASE = 'http://localhost:8080/api';
+import { navigateTo } from '../../utils/navigation';
+import { API_BASE } from '../../lib/api';
 
 export default function OwnerPageSettings({ user, token }) {
   const [loading, setLoading] = useState(true);
@@ -292,7 +292,7 @@ export default function OwnerPageSettings({ user, token }) {
   };
 
   const handleCopyBioURL = () => {
-    const fullURL = `http://localhost:5173/${slug || 'demo'}`;
+    const fullURL = `${window.location.origin}/${slug || 'demo'}`;
     navigator.clipboard.writeText(fullURL);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
@@ -361,7 +361,7 @@ export default function OwnerPageSettings({ user, token }) {
             <button
               type="button"
               onClick={() => {
-                window.location.hash = '#billing';
+                navigateTo('/owner/billing');
               }}
               className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
             >
@@ -383,7 +383,7 @@ export default function OwnerPageSettings({ user, token }) {
             {copiedLink ? <CheckIcon className="w-3.5 h-3.5 text-emerald-600" /> : <CopyIcon className="w-3.5 h-3.5" />}
           </button>
           <a
-            href={`http://localhost:5173/${slug || 'demo'}`}
+            href={`/p/${slug || 'demo'}`}
             target="_blank"
             rel="noreferrer"
             className="text-slate-500 hover:text-slate-900 transition-colors p-1"
@@ -414,7 +414,7 @@ export default function OwnerPageSettings({ user, token }) {
           </div>
           <button
             type="button"
-            onClick={() => { window.location.hash = '#billing'; }}
+            onClick={() => { navigateTo('/owner/billing'); }}
             className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs shadow-md shadow-indigo-600/20 shrink-0 transition-all active:scale-95 flex items-center justify-center gap-1.5"
           >
             <SparklesIcon className="w-4 h-4 text-amber-300" />

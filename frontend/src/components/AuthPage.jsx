@@ -10,6 +10,8 @@ import {
   CheckIcon,
   AlertCircleIcon,
 } from './Icons';
+import { navigateTo } from '../utils/navigation';
+import { API_BASE } from '../lib/api';
 
 export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSuccess }) {
   const [mode, setMode] = useState(initialMode); // 'login' | 'register'
@@ -20,6 +22,10 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
+
+  React.useEffect(() => {
+    setMode(initialMode);
+  }, [initialMode]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,7 +50,7 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
     setLoading(true);
 
     try {
-      const endpoint = mode === 'register' ? 'http://localhost:8080/api/auth/register' : 'http://localhost:8080/api/auth/login';
+      const endpoint = mode === 'register' ? `${API_BASE}/auth/register` : `${API_BASE}/auth/login`;
       const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
       const derivedUsername = (email.split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -122,10 +128,10 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
       <div className="w-full max-w-[1040px] grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14 items-center">
         {/* Left Column: Visual Showcase Card */}
         <div className="w-full">
-          <div className="relative overflow-hidden rounded-[28px] sm:rounded-[34px] p-8 sm:p-12 min-h-[560px] sm:min-h-[620px] flex flex-col justify-center items-center text-center border border-white/[0.08] shadow-[0_24px_60px_-15px_rgba(0,0,0,0.9)] bg-gradient-to-b from-[#4a177d] via-[#1a082b] to-[#07040d]">
+          <div className="relative overflow-hidden rounded-[28px] sm:rounded-[34px] p-8 sm:p-12 min-h-[560px] sm:min-h-[620px] flex flex-col justify-center items-center text-center border border-white/[0.08] shadow-[0_24px_60px_-15px_rgba(0,0,0,0.9)] bg-gradient-to-b from-[#181a1d] via-[#101214] to-[#090a0b]">
             {/* Atmospheric Ambient Glow Layer */}
-            <div className="absolute -top-20 -left-20 w-[420px] h-[420px] bg-purple-500/35 rounded-full blur-[110px] pointer-events-none" />
-            <div className="absolute top-1/2 -right-16 w-80 h-80 bg-violet-600/25 rounded-full blur-[100px] pointer-events-none" />
+            <div className="absolute -top-24 -left-24 w-[380px] h-[380px] bg-white/[0.03] rounded-full blur-[100px] pointer-events-none" />
+            <div className="absolute top-1/2 -right-20 w-72 h-72 bg-[var(--color-acid-lime)]/5 rounded-full blur-[100px] pointer-events-none" />
 
             <div className="relative z-10 w-full max-w-sm flex flex-col items-center">
               {/* Brand Logo & Name */}
@@ -134,10 +140,10 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
               </div>
 
               {/* Title & Subtitle */}
-              <h2 className="text-3xl sm:text-[34px] font-[510] text-white tracking-tight mb-2.5">
+              <h2 className="text-3xl sm:text-[34px] font-[510] text-[var(--color-paper)] tracking-tight mb-2.5">
                 {mode === 'register' ? 'Get Started with Us' : 'Welcome Back'}
               </h2>
-              <p className="text-zinc-300/80 text-sm leading-relaxed mb-8 max-w-xs">
+              <p className="text-[var(--color-fog)] text-sm leading-relaxed mb-8 max-w-xs">
                 {mode === 'register'
                   ? 'Complete these easy steps to register your account.'
                   : 'Manage your links, store, and analytics in one place.'}
@@ -156,21 +162,21 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
                 </div>
 
                 {/* Step 2 */}
-                <div className="bg-[#18191f]/70 border border-white/5 text-zinc-400 rounded-xl p-3.5 flex items-center gap-3.5 transition-colors">
-                  <span className="w-6 h-6 rounded-full bg-white/10 text-zinc-300 flex items-center justify-center font-medium text-xs shrink-0">
+                <div className="bg-white/[0.03] border border-white/[0.08] text-[var(--color-fog)] rounded-xl p-3.5 flex items-center gap-3.5 transition-colors">
+                  <span className="w-6 h-6 rounded-full bg-white/10 text-white flex items-center justify-center font-medium text-xs shrink-0">
                     2
                   </span>
-                  <span className="text-sm font-medium">
+                  <span className="text-sm font-medium text-[var(--color-mist)]">
                     Set up your workspace
                   </span>
                 </div>
 
                 {/* Step 3 */}
-                <div className="bg-[#18191f]/70 border border-white/5 text-zinc-400 rounded-xl p-3.5 flex items-center gap-3.5 transition-colors">
-                  <span className="w-6 h-6 rounded-full bg-white/10 text-zinc-300 flex items-center justify-center font-medium text-xs shrink-0">
+                <div className="bg-white/[0.03] border border-white/[0.08] text-[var(--color-fog)] rounded-xl p-3.5 flex items-center gap-3.5 transition-colors">
+                  <span className="w-6 h-6 rounded-full bg-white/10 text-white flex items-center justify-center font-medium text-xs shrink-0">
                     3
                   </span>
-                  <span className="text-sm font-medium">
+                  <span className="text-sm font-medium text-[var(--color-mist)]">
                     Set up your profile
                   </span>
                 </div>
@@ -186,7 +192,7 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
             <button
               type="button"
               onClick={onBackToHome}
-              className="inline-flex items-center gap-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors mb-6 self-start group"
+              className="inline-flex items-center gap-2 text-xs font-mono text-[var(--color-fog)] hover:text-white transition-colors mb-6 self-start group"
             >
               <ArrowLeftIcon className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
               <span>Kembali ke Beranda</span>
@@ -198,7 +204,7 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
             <h1 className="text-2xl sm:text-[28px] font-[510] text-white tracking-tight mb-2">
               {mode === 'register' ? 'Sign Up Account' : 'Welcome Back'}
             </h1>
-            <p className="text-zinc-400 text-sm">
+            <p className="text-[var(--color-fog)] text-sm">
               {mode === 'register'
                 ? 'Enter your personal data to create your account.'
                 : 'Enter your credentials to access your account.'}
@@ -211,7 +217,7 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
               type="button"
               onClick={() => handleOAuthLogin('google')}
               disabled={loading}
-              className="bg-[#18191f] hover:bg-[#202128] border border-white/10 hover:border-white/20 text-white text-sm font-medium py-2.5 px-3 rounded-xl flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] disabled:opacity-50"
+              className="bg-[#141517] hover:bg-[#1a1c1e] border border-white/10 hover:border-white/20 text-white text-sm font-medium py-2.5 px-3 rounded-xl flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] disabled:opacity-50"
             >
               <GoogleIcon className="w-4 h-4 shrink-0" />
               <span>Google</span>
@@ -220,7 +226,7 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
               type="button"
               onClick={() => handleOAuthLogin('github')}
               disabled={loading}
-              className="bg-[#18191f] hover:bg-[#202128] border border-white/10 hover:border-white/20 text-white text-sm font-medium py-2.5 px-3 rounded-xl flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] disabled:opacity-50"
+              className="bg-[#141517] hover:bg-[#1a1c1e] border border-white/10 hover:border-white/20 text-white text-sm font-medium py-2.5 px-3 rounded-xl flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] disabled:opacity-50"
             >
               <GithubIcon className="w-4 h-4 shrink-0" />
               <span>Github</span>
@@ -235,12 +241,13 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
           </div>
 
           {/* Quick Demo Test Accounts (Superadmin & Owner) */}
-          <div className="mb-5 p-3 rounded-xl bg-purple-950/20 border border-purple-500/20">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-mono text-purple-300 font-medium tracking-wide">
-                Akun Demo Uji Coba:
+          <div className="mb-5 p-3.5 rounded-xl bg-[var(--color-obsidian)] border border-[var(--color-graphite)]">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-[11px] font-mono text-[var(--color-mist)] font-medium tracking-wide flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-acid-lime)]" />
+                <span>Akun Demo Uji Coba:</span>
               </span>
-              <span className="text-[10px] text-zinc-400 font-mono">Klik untuk Isi Cepat</span>
+              <span className="text-[10px] text-[var(--color-ash)] font-mono">Klik untuk Isi Cepat</span>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -251,13 +258,13 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
                   setMode('login');
                   setFeedback(null);
                 }}
-                className="text-left p-2 rounded-lg bg-white/[0.04] hover:bg-purple-600/20 border border-white/5 hover:border-purple-500/30 transition-all text-xs group"
+                className="text-left p-2.5 rounded-lg bg-black/40 hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/20 transition-all text-xs group"
               >
-                <div className="font-semibold text-white group-hover:text-purple-300 flex items-center gap-1.5">
+                <div className="font-semibold text-white group-hover:text-[var(--color-acid-lime)] flex items-center gap-1.5 mb-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
                   <span>Super Admin</span>
                 </div>
-                <div className="text-[10px] text-zinc-400 font-mono truncate">admin@klikin.id</div>
+                <div className="text-[11px] text-zinc-300 font-mono truncate">admin@klikin.id</div>
               </button>
               <button
                 type="button"
@@ -267,13 +274,13 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
                   setMode('login');
                   setFeedback(null);
                 }}
-                className="text-left p-2 rounded-lg bg-white/[0.04] hover:bg-emerald-600/20 border border-white/5 hover:border-emerald-500/30 transition-all text-xs group"
+                className="text-left p-2.5 rounded-lg bg-black/40 hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/20 transition-all text-xs group"
               >
-                <div className="font-semibold text-white group-hover:text-emerald-300 flex items-center gap-1.5">
+                <div className="font-semibold text-white group-hover:text-emerald-400 flex items-center gap-1.5 mb-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   <span>Owner Toko</span>
                 </div>
-                <div className="text-[10px] text-zinc-400 font-mono truncate">owner@klikin.id</div>
+                <div className="text-[11px] text-zinc-300 font-mono truncate">owner@klikin.id</div>
               </button>
             </div>
           </div>
@@ -310,7 +317,8 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     placeholder="eg. John"
-                    className="w-full bg-[#18191f] border border-white/10 focus:border-white/30 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none transition-colors"
+                    style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                    className="auth-input w-full bg-[#141517] border border-white/10 focus:border-white/30 rounded-xl px-3.5 py-2.5 text-sm !text-white placeholder-zinc-500 focus:outline-none transition-colors"
                   />
                 </div>
                 <div>
@@ -323,7 +331,8 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     placeholder="eg. Francisco"
-                    className="w-full bg-[#18191f] border border-white/10 focus:border-white/30 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none transition-colors"
+                    style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                    className="auth-input w-full bg-[#141517] border border-white/10 focus:border-white/30 rounded-xl px-3.5 py-2.5 text-sm !text-white placeholder-zinc-500 focus:outline-none transition-colors"
                   />
                 </div>
               </div>
@@ -339,7 +348,8 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="eg. johnfrans@gmail.com"
-                className="w-full bg-[#18191f] border border-white/10 focus:border-white/30 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none transition-colors"
+                style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                className="auth-input w-full bg-[#141517] border border-white/10 focus:border-white/30 rounded-xl px-3.5 py-2.5 text-sm !text-white placeholder-zinc-500 focus:outline-none transition-colors"
               />
             </div>
 
@@ -370,7 +380,8 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="w-full bg-[#18191f] border border-white/10 focus:border-white/30 rounded-xl px-3.5 py-2.5 pr-10 text-sm text-white placeholder-zinc-500 focus:outline-none transition-colors"
+                  style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                  className="auth-input w-full bg-[#141517] border border-white/10 focus:border-white/30 rounded-xl px-3.5 py-2.5 pr-10 text-sm !text-white placeholder-zinc-500 focus:outline-none transition-colors"
                 />
                 <button
                   type="button"
@@ -396,7 +407,7 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-white hover:bg-zinc-200 text-black font-semibold py-3.5 px-4 rounded-xl text-sm transition-all shadow-md active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed mt-2 flex items-center justify-center gap-2"
+              className="w-full bg-white hover:bg-[var(--color-bone)] text-black font-semibold py-3.5 px-4 rounded-xl text-sm transition-all shadow-md active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed mt-2 flex items-center justify-center gap-2"
             >
               {loading && (
                 <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
@@ -415,6 +426,7 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
                   onClick={() => {
                     setMode('login');
                     setFeedback(null);
+                    navigateTo('/login');
                   }}
                   className="text-white font-medium hover:underline ml-0.5"
                 >
@@ -429,6 +441,7 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
                   onClick={() => {
                     setMode('register');
                     setFeedback(null);
+                    navigateTo('/register');
                   }}
                   className="text-white font-medium hover:underline ml-0.5"
                 >

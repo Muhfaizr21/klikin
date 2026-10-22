@@ -14,8 +14,7 @@ import {
   SearchIcon,
 } from '../Icons';
 import AnalyticsPaywallModal from './AnalyticsPaywallModal';
-
-const API_BASE = 'http://localhost:8080/api';
+import { API_BASE } from '../../lib/api';
 
 export default function OwnerCustomDomain({ user, token }) {
   const [loading, setLoading] = useState(true);

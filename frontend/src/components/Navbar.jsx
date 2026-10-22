@@ -79,7 +79,7 @@ export default function Navbar({ user, onNavigateToAuth, onNavigateToDashboard }
             ) : (
               <>
                 <a
-                  href="#login"
+                  href="/login"
                   onClick={(e) => {
                     e.preventDefault();
                     onNavigateToAuth?.('login');
@@ -89,7 +89,7 @@ export default function Navbar({ user, onNavigateToAuth, onNavigateToDashboard }
                   Login
                 </a>
                 <a
-                  href="#register"
+                  href="/register"
                   onClick={(e) => {
                     e.preventDefault();
                     onNavigateToAuth?.('register');
@@ -178,7 +178,7 @@ export default function Navbar({ user, onNavigateToAuth, onNavigateToDashboard }
             ) : (
               <>
                 <a
-                  href="#login"
+                  href="/login"
                   onClick={(e) => {
                     e.preventDefault();
                     setMobileMenuOpen(false);
@@ -189,7 +189,7 @@ export default function Navbar({ user, onNavigateToAuth, onNavigateToDashboard }
                   Login
                 </a>
                 <a
-                  href="#register"
+                  href="/register"
                   onClick={(e) => {
                     e.preventDefault();
                     setMobileMenuOpen(false);

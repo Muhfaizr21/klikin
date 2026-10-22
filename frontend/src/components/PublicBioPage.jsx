@@ -18,8 +18,7 @@ import {
   VerifiedBadgeIcon,
   LockIcon,
 } from './Icons';
-
-const API_BASE = 'http://localhost:8080/api';
+import { API_BASE } from '../lib/api';
 
 export default function PublicBioPage({ slug, onBackToHome }) {
   const [page, setPage] = useState(null);

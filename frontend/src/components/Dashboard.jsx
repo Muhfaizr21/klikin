@@ -6,7 +6,7 @@ import OwnerDashboard from './owner/OwnerDashboard';
  * Dashboard Component - Acts as a Clean Architecture Router/Facade
  * Separates SuperAdmin domain (components/admin/) and Owner domain (components/owner/).
  */
-export default function Dashboard({ user, token, onLogout, onBackToHome }) {
+export default function Dashboard({ user, token, onLogout, onBackToHome, initialTab }) {
   if (user?.role === 'SUPER_ADMIN') {
     return (
       <SuperAdminDashboard
@@ -14,6 +14,7 @@ export default function Dashboard({ user, token, onLogout, onBackToHome }) {
         token={token}
         onLogout={onLogout}
         onBackToHome={onBackToHome}
+        initialTab={initialTab}
       />
     );
   }
@@ -24,6 +25,7 @@ export default function Dashboard({ user, token, onLogout, onBackToHome }) {
       token={token}
       onLogout={onLogout}
       onBackToHome={onBackToHome}
+      initialTab={initialTab}
     />
   );
 }

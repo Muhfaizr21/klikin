@@ -56,7 +56,7 @@ export default function Footer({ onNavigateToAuth }) {
               <ul className="space-y-2 text-[var(--color-fog)]">
                 <li>
                   <a
-                    href="#register"
+                    href="/register"
                     onClick={(e) => {
                       e.preventDefault();
                       onNavigateToAuth?.('register');
@@ -68,7 +68,7 @@ export default function Footer({ onNavigateToAuth }) {
                 </li>
                 <li>
                   <a
-                    href="#login"
+                    href="/login"
                     onClick={(e) => {
                       e.preventDefault();
                       onNavigateToAuth?.('login');

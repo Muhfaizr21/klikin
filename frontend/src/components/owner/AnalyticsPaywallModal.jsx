@@ -8,6 +8,7 @@ import {
   GlobeIcon,
   LockIcon,
 } from '../Icons';
+import { navigateTo } from '../../utils/navigation';
 
 export default function AnalyticsPaywallModal({
   isOpen,
@@ -80,7 +81,7 @@ export default function AnalyticsPaywallModal({
           <button
             type="button"
             onClick={() => {
-              window.location.hash = '#billing';
+              navigateTo('/owner/billing');
               onClose();
             }}
             className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-98"

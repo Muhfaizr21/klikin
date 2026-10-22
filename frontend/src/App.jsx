@@ -9,7 +9,84 @@ import Footer from './components/Footer';
 import AuthPage from './components/AuthPage';
 import Dashboard from './components/Dashboard';
 import PublicBioPage from './components/PublicBioPage';
+import { navigateTo, replaceTo } from './utils/navigation';
 import './App.css';
+
+const VALID_OWNER_TABS = [
+  'dashboard',
+  'links',
+  'analytics',
+  'domain',
+  'leads',
+  'billing',
+  'page-settings',
+  'notifications',
+  'support',
+  'settings',
+];
+
+const TAB_ALIASES = {
+  editor: 'links',
+  'editor-bio': 'links',
+};
+
+const RESERVED_PATHS = ['login', 'register', 'owner', 'admin', 'api', 'assets', 'p', 'favicon.ico'];
+
+function parseCurrentRoute() {
+  const path = window.location.pathname;
+  const lowerPath = path.toLowerCase();
+  const hash = window.location.hash.toLowerCase();
+
+  // 1. Backwards-compatibility redirect: convert legacy hash (e.g. #settings, #billing) to clean HTML5 URL
+  if (hash.startsWith('#p/')) {
+    const slug = hash.slice(3) || 'kopiseduh';
+    return { view: 'public_page', slug, tab: 'dashboard', legacyRedirect: `/p/${slug}` };
+  }
+  if (hash === '#login') {
+    return { view: 'login', slug: '', tab: 'dashboard', legacyRedirect: '/login' };
+  }
+  if (hash === '#register') {
+    return { view: 'register', slug: '', tab: 'dashboard', legacyRedirect: '/register' };
+  }
+
+  const cleanHash = hash.replace(/^#/, '');
+  if (VALID_OWNER_TABS.includes(cleanHash) || TAB_ALIASES[cleanHash]) {
+    const resolvedTab = TAB_ALIASES[cleanHash] || cleanHash;
+    return { view: 'dashboard', slug: '', tab: resolvedTab, legacyRedirect: `/owner/${resolvedTab}` };
+  }
+
+  // 2. Parse HTML5 path
+  if (lowerPath === '/login') {
+    return { view: 'login', slug: '', tab: 'dashboard', legacyRedirect: null };
+  }
+  if (lowerPath === '/register') {
+    return { view: 'register', slug: '', tab: 'dashboard', legacyRedirect: null };
+  }
+  if (lowerPath.startsWith('/p/')) {
+    const slug = lowerPath.slice(3).replace(/^\/+|\/+$/g, '') || 'kopiseduh';
+    return { view: 'public_page', slug, tab: 'dashboard', legacyRedirect: null };
+  }
+  if (lowerPath === '/owner' || lowerPath === '/owner/') {
+    return { view: 'dashboard', slug: '', tab: 'dashboard', legacyRedirect: '/owner/dashboard' };
+  }
+  if (lowerPath.startsWith('/owner/')) {
+    const rawTab = lowerPath.replace(/^\/owner\/?/, '').split('/')[0];
+    const resolvedTab = TAB_ALIASES[rawTab] || (VALID_OWNER_TABS.includes(rawTab) ? rawTab : 'dashboard');
+    return { view: 'dashboard', slug: '', tab: resolvedTab, legacyRedirect: null };
+  }
+  if (lowerPath === '/admin' || lowerPath.startsWith('/admin/')) {
+    const rawTab = lowerPath.replace(/^\/admin\/?/, '').split('/')[0] || 'reports';
+    return { view: 'dashboard', slug: '', tab: rawTab, legacyRedirect: null };
+  }
+
+  // 3. Single-segment public bio slug (e.g. /kopiseduh)
+  const singleSegmentMatch = lowerPath.match(/^\/([a-z0-9_-]+)\/?$/);
+  if (singleSegmentMatch && !RESERVED_PATHS.includes(singleSegmentMatch[1])) {
+    return { view: 'public_page', slug: singleSegmentMatch[1], tab: 'dashboard', legacyRedirect: null };
+  }
+
+  return { view: 'landing', slug: '', tab: 'dashboard', legacyRedirect: null };
+}
 
 export default function App() {
   const [authToken, setAuthToken] = useState(() => localStorage.getItem('klikin_token') || null);
@@ -22,81 +99,45 @@ export default function App() {
     }
   });
 
-  const [publicSlug, setPublicSlug] = useState(() => {
-    const hash = window.location.hash.toLowerCase();
-    if (hash.startsWith('#p/')) {
-      return hash.slice(3) || 'kopiseduh';
-    }
-    return '';
-  });
+  const [route, setRoute] = useState(parseCurrentRoute);
 
-  const isOwnerRoute = (hash) => {
-    const clean = hash.replace(/^#/, '');
-    return [
-      'dashboard',
-      'editor',
-      'editor-bio',
-      'links',
-      'analytics',
-      'domain',
-      'leads',
-      'billing',
-      'settings',
-    ].includes(clean);
-  };
-
-  const [currentView, setCurrentView] = useState(() => {
-    const hash = window.location.hash.toLowerCase();
-    const token = localStorage.getItem('klikin_token');
-    if (hash.startsWith('#p/')) return 'public_page';
-    if (isOwnerRoute(hash)) {
-      return token ? 'dashboard' : 'login';
+  // If initial load hit a legacy hash (like /#settings), clean it up in the address bar
+  useEffect(() => {
+    if (route.legacyRedirect) {
+      replaceTo(route.legacyRedirect);
     }
-    if (hash === '#login') return 'login';
-    if (hash === '#register') return 'register';
-    return 'landing';
-  });
+  }, [route.legacyRedirect]);
 
   useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.toLowerCase();
-      if (hash.startsWith('#p/')) {
-        setPublicSlug(hash.slice(3) || 'kopiseduh');
-        setCurrentView('public_page');
-      } else if (isOwnerRoute(hash)) {
-        if (authToken) {
-          setCurrentView('dashboard');
-        } else {
-          setCurrentView('login');
-        }
-      } else if (hash === '#login') {
-        setCurrentView('login');
-      } else if (hash === '#register') {
-        setCurrentView('register');
-      } else if (!hash || hash === '#') {
-        setCurrentView('landing');
+    const handleLocationChange = () => {
+      const parsed = parseCurrentRoute();
+      if (parsed.legacyRedirect) {
+        replaceTo(parsed.legacyRedirect);
       }
+      setRoute(parsed);
     };
 
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [authToken]);
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, []);
 
   const handleNavigateToAuth = (mode) => {
-    window.location.hash = `#${mode}`;
-    setCurrentView(mode);
+    const target = mode === 'register' ? '/register' : '/login';
+    navigateTo(target);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleBackToHome = () => {
-    window.location.hash = '';
-    setCurrentView('landing');
+    navigateTo('/');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleNavigateToDashboard = () => {
-    window.location.hash = '#dashboard';
-    setCurrentView('dashboard');
+    navigateTo('/owner/dashboard');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -105,8 +146,13 @@ export default function App() {
     setAuthToken(token);
     localStorage.setItem('klikin_user', JSON.stringify(user));
     localStorage.setItem('klikin_token', token);
-    window.location.hash = '#dashboard';
-    setCurrentView('dashboard');
+
+    // Check if user was trying to access a specific owner tab before auth
+    const savedRedirect = sessionStorage.getItem('klikin_redirect_url');
+    sessionStorage.removeItem('klikin_redirect_url');
+    const destination = savedRedirect && savedRedirect.startsWith('/owner') ? savedRedirect : '/owner/dashboard';
+
+    navigateTo(destination);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -115,41 +161,58 @@ export default function App() {
     setAuthToken(null);
     localStorage.removeItem('klikin_user');
     localStorage.removeItem('klikin_token');
-    window.location.hash = '';
-    setCurrentView('landing');
+    sessionStorage.removeItem('klikin_redirect_url');
+    navigateTo('/');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  if (currentView === 'public_page') {
+  // 1. Public Bio Page route (/p/:slug or /:slug)
+  if (route.view === 'public_page') {
     return (
       <PublicBioPage
-        slug={publicSlug || 'kopiseduh'}
+        slug={route.slug || 'kopiseduh'}
         onBackToHome={handleBackToHome}
       />
     );
   }
 
-  if (currentView === 'dashboard' && authUser && authToken) {
+  // 2. Owner / Admin Dashboard route (/owner/* or /admin/*)
+  if (route.view === 'dashboard') {
+    // Auth gate for dashboard: if token not present, redirect to login and preserve destination
+    if (!authToken || !authUser) {
+      sessionStorage.setItem('klikin_redirect_url', window.location.pathname);
+      return (
+        <AuthPage
+          initialMode="login"
+          onBackToHome={handleBackToHome}
+          onAuthSuccess={handleAuthSuccess}
+        />
+      );
+    }
+
     return (
       <Dashboard
         user={authUser}
         token={authToken}
         onLogout={handleLogout}
         onBackToHome={handleBackToHome}
+        initialTab={route.tab}
       />
     );
   }
 
-  if (currentView === 'login' || currentView === 'register') {
+  // 3. Auth pages (/login or /register)
+  if (route.view === 'login' || route.view === 'register') {
     return (
       <AuthPage
-        initialMode={currentView}
+        initialMode={route.view}
         onBackToHome={handleBackToHome}
         onAuthSuccess={handleAuthSuccess}
       />
     );
   }
 
+  // 4. Default: Landing page (/)
   return (
     <div className="main-wrapper">
       <Navbar
@@ -168,4 +231,3 @@ export default function App() {
     </div>
   );
 }
-

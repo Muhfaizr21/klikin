@@ -19,8 +19,7 @@ import {
   SearchIcon,
   FilterIcon,
 } from '../Icons';
-
-const API_BASE = 'http://localhost:8080/api';
+import { API_BASE } from '../../lib/api';
 
 export default function OwnerAnalytics({ user, token }) {
   // Preset: '7d' | '30d' | '90d' | 'custom'

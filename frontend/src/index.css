@@ -46,7 +46,7 @@ body {
   overflow-x: hidden;
 }
 
-/* Universal form controls: ensure crisp, solid slate-900 text on all inputs */
+/* Universal form controls: ensure crisp, solid text */
 input, textarea, select {
   color: #0f172a;
 }
@@ -60,11 +60,41 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   outline: none !important;
 }
 
-/* Landing page & dark UI overrides */
+/* Dark theme & Auth form inputs: ensure crisp, solid 100% white text */
+.dark-input,
+.auth-input,
+input.text-white,
+input[type="text"].text-white,
+input[type="email"].text-white,
+input[type="password"].text-white,
 .landing-dark input,
 .bg-void input,
-.bg-carbon input {
-  color: #ffffff;
+.bg-carbon input,
+.bg-obsidian input,
+[class*="bg-\\[var(--color-void)\\]"] input,
+[class*="bg-\\[var(--color-carbon)\\]"] input,
+[class*="bg-\\[var(--color-obsidian)\\]"] input {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+/* Browser autofill styling for dark inputs (Safari & Chrome) */
+input.text-white:-webkit-autofill,
+input.text-white:-webkit-autofill:hover,
+input.text-white:-webkit-autofill:focus,
+input.text-white:-webkit-autofill:active,
+.auth-input:-webkit-autofill,
+.auth-input:-webkit-autofill:hover,
+.auth-input:-webkit-autofill:focus,
+.auth-input:-webkit-autofill:active,
+[class*="bg-\\[var(--color-void)\\]"] input:-webkit-autofill,
+[class*="bg-\\[var(--color-void)\\]"] input:-webkit-autofill:hover,
+[class*="bg-\\[var(--color-void)\\]"] input:-webkit-autofill:focus,
+[class*="bg-\\[var(--color-void)\\]"] input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #18191f inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff !important;
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 :focus-visible:not(input):not(textarea):not(select) {

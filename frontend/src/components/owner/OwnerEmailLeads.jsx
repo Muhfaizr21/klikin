@@ -12,8 +12,8 @@ import {
   SendIcon,
 } from '../Icons';
 import AnalyticsPaywallModal from './AnalyticsPaywallModal';
-
-const API_BASE = 'http://localhost:8080/api';
+import { navigateTo } from '../../utils/navigation';
+import { API_BASE } from '../../lib/api';
 
 export default function OwnerEmailLeads({ user, token }) {
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'settings'
@@ -305,7 +305,7 @@ export default function OwnerEmailLeads({ user, token }) {
             <button
               type="button"
               onClick={() => {
-                window.location.hash = '#billing';
+                navigateTo('/owner/billing');
               }}
               className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
             >
@@ -335,7 +335,7 @@ export default function OwnerEmailLeads({ user, token }) {
           </div>
           <button
             type="button"
-            onClick={() => { window.location.hash = '#billing'; }}
+            onClick={() => { navigateTo('/owner/billing'); }}
             className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs shadow-md shadow-indigo-600/20 shrink-0 transition-all active:scale-95 flex items-center justify-center gap-1.5"
           >
             <SparklesIcon className="w-4 h-4 text-amber-300" />

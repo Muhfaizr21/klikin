@@ -16,12 +16,12 @@ import OwnerCustomDomain from './OwnerCustomDomain';
 import OwnerEmailLeads from './OwnerEmailLeads';
 import OwnerBilling from './OwnerBilling';
 import OwnerPageSettings from './OwnerPageSettings';
+import OwnerAccountSettings from './OwnerAccountSettings';
 import OwnerNotifications from './OwnerNotifications';
 import OwnerSupport from './OwnerSupport';
 import { AlertCircleIcon, CheckIcon } from '../Icons';
 import { supabase } from '../../lib/supabase';
-
-const API_BASE = 'http://localhost:8080/api';
+import { API_BASE } from '../../lib/api';
 
 const playNotificationChime = () => {
   try {
@@ -48,7 +48,7 @@ const playNotificationChime = () => {
   }
 };
 
-export default function OwnerDashboard({ user, token, onLogout }) {
+export default function OwnerDashboard({ user, token, onLogout, initialTab = 'dashboard' }) {
   const [workspace, setWorkspace] = useState(null);
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState(null);
@@ -58,33 +58,73 @@ export default function OwnerDashboard({ user, token, onLogout }) {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [leadsCount, setLeadsCount] = useState(0);
 
-  const parseTabFromHash = () => {
-    const clean = window.location.hash.toLowerCase().replace(/^#/, '');
-    if (clean === 'editor-bio' || clean === 'editor' || clean === 'links') return 'links';
-    if (['analytics', 'domain', 'leads', 'billing', 'settings', 'page-settings', 'notifications', 'support'].includes(clean)) {
-      return clean;
+  const parseTabFromLocation = () => {
+    // 1. Pathname check: /owner/:tab
+    const path = window.location.pathname.toLowerCase();
+    const ownerMatch = path.match(/^\/owner(?:\/([a-z0-9_-]+))?/);
+    if (ownerMatch && ownerMatch[1]) {
+      const seg = ownerMatch[1];
+      if (seg === 'editor-bio' || seg === 'editor' || seg === 'links') return 'links';
+      if (['analytics', 'domain', 'leads', 'billing', 'settings', 'page-settings', 'notifications', 'support'].includes(seg)) {
+        return seg;
+      }
+      if (seg === 'dashboard') return 'dashboard';
     }
+
+    // 2. Hash check (backwards compatibility): #settings, #links, etc.
+    const cleanHash = window.location.hash.toLowerCase().replace(/^#/, '');
+    if (cleanHash === 'editor-bio' || cleanHash === 'editor' || cleanHash === 'links') return 'links';
+    if (['analytics', 'domain', 'leads', 'billing', 'settings', 'page-settings', 'notifications', 'support'].includes(cleanHash)) {
+      return cleanHash;
+    }
+
+    if (initialTab && initialTab !== 'dashboard') return initialTab;
     return 'dashboard';
   };
 
-  const [activeTab, setActiveTab] = useState(parseTabFromHash);
+  const [activeTab, setActiveTab] = useState(parseTabFromLocation);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  // Sync hash changes (e.g. back/forward button)
+  // Sync route changes (browser back/forward button, external navigation)
   useEffect(() => {
-    const handleHash = () => {
-      const tab = parseTabFromHash();
+    const handleLocationChange = () => {
+      const tab = parseTabFromLocation();
       setActiveTab(tab);
     };
-    window.addEventListener('hashchange', handleHash);
-    return () => window.removeEventListener('hashchange', handleHash);
+
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+
+    // Normalize URL on mount to clean /owner/:tab
+    const currentTab = parseTabFromLocation();
+    const canonicalPath = `/owner/${currentTab}`;
+    if (window.location.pathname !== canonicalPath || window.location.hash) {
+      window.history.replaceState(null, '', canonicalPath);
+    }
+
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
   }, []);
+
+  // Update tab when initialTab prop changes from parent router
+  useEffect(() => {
+    if (initialTab && initialTab !== activeTab) {
+      setActiveTab(initialTab);
+      const canonicalPath = `/owner/${initialTab}`;
+      if (window.location.pathname !== canonicalPath) {
+        window.history.replaceState(null, '', canonicalPath);
+      }
+    }
+  }, [initialTab]);
 
   const handleSelectTab = (tabId) => {
     setActiveTab(tabId);
-    const targetHash = `#${tabId}`;
-    if (window.location.hash !== targetHash) {
-      window.location.hash = targetHash;
+    const targetPath = `/owner/${tabId}`;
+    if (window.location.pathname !== targetPath || window.location.hash) {
+      window.history.pushState(null, '', targetPath);
+      window.dispatchEvent(new PopStateEvent('popstate'));
     }
   };
 
@@ -484,10 +524,16 @@ export default function OwnerDashboard({ user, token, onLogout }) {
               token={token}
               onRefreshUser={fetchOwnerWorkspace}
             />
-          ) : activeTab === 'page-settings' || activeTab === 'settings' ? (
+          ) : activeTab === 'page-settings' ? (
             <OwnerPageSettings
               user={user}
               token={token}
+            />
+          ) : activeTab === 'settings' ? (
+            <OwnerAccountSettings
+              user={user}
+              token={token}
+              onRefreshUser={fetchOwnerWorkspace}
             />
           ) : activeTab === 'notifications' ? (
             <OwnerNotifications
