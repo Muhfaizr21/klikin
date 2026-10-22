@@ -8,6 +8,7 @@ import JourneyConversionCard from './JourneyConversionCard';
 import CohortRetentionCard from './CohortRetentionCard';
 import UserDirectoryTable from './UserDirectoryTable';
 import PlatformOverviewCharts from './PlatformOverviewCharts';
+import PlatformReportsView from './PlatformReportsView';
 import { API_BASE } from '../../lib/api';
 import { navigateTo } from '../../utils/navigation';
 import {
@@ -216,51 +217,10 @@ export default function SuperAdminDashboard({
         )}
 
         {/* ========================================================================= */}
-        {/* 3.6: ANALITIK PLATFORM / REPORTS (Primary Reference View) */}
+        {/* 3.6: ANALITIK PLATFORM / REPORTS */}
         {/* ========================================================================= */}
         {(activeTab === 'reports' || activeTab === 'analytics') && (
-          <div className="space-y-6">
-            <AdminHeader
-              title="Laporan Platform & Analitik"
-              subtitle="September 2026 • Analisis performa platform Klikin dibandingkan Agustus"
-              activeSubTab={activeSubTab}
-              onSelectSubTab={setActiveSubTab}
-              onExport={handleExport}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-            />
-
-            {/* 5 Top KPI Cards */}
-            <AdminMetricCards stats={stats} />
-
-            {/* Middle Section: Revenue by category (7 cols) + Provider utilisation (5 cols) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-              <div className="lg:col-span-7">
-                <RevenueByCategoryCard />
-              </div>
-              <div className="lg:col-span-5">
-                <TopTenantPerformanceCard
-                  onActionClick={() => {
-                    setFeedback({
-                      type: 'success',
-                      message: 'Rekomendasi optimasi slot telah disimulasikan pada tenant.',
-                    });
-                    setTimeout(() => setFeedback(null), 3500);
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Bottom Section: Journey conversion funnel (7 cols) + Cohort Retention Heatmap (5 cols) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-              <div className="lg:col-span-7">
-                <JourneyConversionCard />
-              </div>
-              <div className="lg:col-span-5">
-                <CohortRetentionCard />
-              </div>
-            </div>
-          </div>
+          <PlatformReportsView token={token} />
         )}
 
         {/* ========================================================================= */}

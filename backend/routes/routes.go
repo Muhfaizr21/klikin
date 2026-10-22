@@ -31,6 +31,7 @@ func SetupRoutes(cfg *config.Config) http.Handler {
 	authService := authSvc.NewAuthService(config.DB)
 	accountService := accountSvc.NewAccountService(config.DB)
 	adminService := adminSvc.NewAdminService(config.DB)
+	platformAnalyticsService := adminSvc.NewPlatformAnalyticsService(config.DB)
 	ownerService := ownerSvc.NewOwnerService(config.DB)
 	analyticsService := analyticsSvc.NewAnalyticsService(config.DB)
 	domainService := domainSvc.NewDomainService(config.DB)
@@ -44,6 +45,7 @@ func SetupRoutes(cfg *config.Config) http.Handler {
 	authController := authCtrl.NewAuthController(authService)
 	accountController := ownerCtrl.NewAccountController(accountService)
 	adminController := adminCtrl.NewAdminController(adminService)
+	platformAnalyticsController := adminCtrl.NewPlatformAnalyticsController(platformAnalyticsService)
 	ownerController := ownerCtrl.NewOwnerController(ownerService)
 	analyticsController := ownerCtrl.NewAnalyticsController(analyticsService)
 	publicPageController := publicCtrl.NewPageController()
@@ -72,6 +74,8 @@ func SetupRoutes(cfg *config.Config) http.Handler {
 	// --- 5. SUPER ADMIN ENDPOINTS (Role: SUPER_ADMIN only) ---
 	mux.HandleFunc("GET /api/admin/stats", middlewares.RequireRole(models.RoleSuperAdmin, adminController.GetStats))
 	mux.HandleFunc("GET /api/admin/users", middlewares.RequireRole(models.RoleSuperAdmin, adminController.GetUsers))
+	mux.HandleFunc("GET /api/admin/analytics/platform", middlewares.RequireRole(models.RoleSuperAdmin, platformAnalyticsController.GetAnalytics))
+	mux.HandleFunc("GET /api/admin/analytics/export", middlewares.RequireRole(models.RoleSuperAdmin, platformAnalyticsController.ExportCSV))
 
 	// --- 6. ACCOUNT OWNER WORKSPACE ENDPOINTS (Role: ACCOUNT_OWNER only) ---
 	mux.HandleFunc("GET /api/owner/workspace", middlewares.RequireRole(models.RoleAccountOwner, ownerController.GetWorkspace))
