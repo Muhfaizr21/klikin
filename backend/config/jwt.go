@@ -2,13 +2,29 @@ package config
 
 import (
 	"errors"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"klikin-backend/models"
 )
 
-var jwtSecret = []byte("klikin-secure-jwt-signing-key-2026-precision")
+var jwtSecret = []byte( resolveInitialJWTSecret() )
+
+func resolveInitialJWTSecret() string {
+	if envSecret := strings.TrimSpace(os.Getenv("JWT_SECRET")); envSecret != "" {
+		return envSecret
+	}
+	return "klikin-secure-jwt-signing-key-2026-precision"
+}
+
+// SetJWTSecret updates the active HMAC signing key from loaded configuration
+func SetJWTSecret(secret string) {
+	if trimmed := strings.TrimSpace(secret); trimmed != "" {
+		jwtSecret = []byte(trimmed)
+	}
+}
 
 type JWTClaims struct {
 	UserID   string          `json:"user_id"`

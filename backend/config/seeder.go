@@ -473,14 +473,14 @@ func SeedDatabase(db *gorm.DB) error {
 			Plan:               models.PlanPro,
 			BillingCycle:       "monthly",
 			Status:             models.SubscriptionStatusActive,
-			Price:              49000,
+			Price:              29000,
 			Currency:           "IDR",
 			CurrentPeriodStart: periodStart,
 			CurrentPeriodEnd:   periodEnd,
 			CancelAtPeriodEnd:  false,
-			PaymentMethodBrand: "mastercard",
-			PaymentMethodLast4: "4242",
-			PaymentMethodExp:   "12/28",
+			PaymentMethodBrand: "midtrans",
+			PaymentMethodLast4: "snap",
+			PaymentMethodExp:   "active",
 			CreatedAt:          periodStart,
 			UpdatedAt:          now,
 		}
@@ -497,9 +497,9 @@ func SeedDatabase(db *gorm.DB) error {
 				SubscriptionID: sub.ID,
 				PlanName:       "Klikin Pro (Bulanan)",
 				BillingCycle:   "monthly",
-				Amount:         49000,
-				Tax:            5390,
-				Total:          54390,
+				Amount:         29000,
+				Tax:            3190,
+				Total:          32190,
 				Status:         "paid",
 				BillingReason:  "subscription_cycle",
 				PaidAt:         &pastPaid1,
@@ -512,9 +512,9 @@ func SeedDatabase(db *gorm.DB) error {
 				SubscriptionID: sub.ID,
 				PlanName:       "Klikin Pro (Bulanan)",
 				BillingCycle:   "monthly",
-				Amount:         49000,
-				Tax:            5390,
-				Total:          54390,
+				Amount:         29000,
+				Tax:            3190,
+				Total:          32190,
 				Status:         "paid",
 				BillingReason:  "subscription_create",
 				PaidAt:         &pastPaid2,
@@ -612,7 +612,7 @@ func SeedDatabase(db *gorm.DB) error {
 			{
 				ID:        "eml_04",
 				UserID:    "usr_owner_kopi",
-				Subject:   "Selamat Datang di Klikin — Mulai Personalisasi Bio Anda",
+				Subject:   "Selamat Datang di Klikin: Mulai Personalisasi Bio Anda",
 				Recipient: "owner@kopiseduh.id",
 				Category:  "welcome",
 				Status:    "delivered",
@@ -706,13 +706,732 @@ func SeedDatabase(db *gorm.DB) error {
 				ID:         "msg_s02",
 				TicketID:   tkt.ID,
 				SenderType: "support",
-				SenderName: "Dina — Tim Support Klikin",
+				SenderName: "Dina - Tim Support Klikin",
 				Message:    "Halo Kak! Ya, integrasi TikTok Pixel di menu Pengaturan Halaman sudah otomatis melacak event ViewContent saat bio dikunjungi dan event Click ketika pengunjung menekan salah satu tautan Anda. Terima kasih!",
 				CreatedAt:  now.AddDate(0, 0, -2),
 			},
 		}
 		db.Create(&msgs)
 		log.Println("🌱 [Seeder] Seeded sample resolved support ticket with messages")
+	}
+
+	// 14. Seed Infrastructure & Operational Costs (Readme 3.7)
+	var expenseCount int64
+	db.Model(&models.InfrastructureCost{}).Count(&expenseCount)
+	if expenseCount == 0 {
+		now := time.Now()
+		currentMonth := now.Format("2006-01")
+		prevMonth1 := now.AddDate(0, -1, 0).Format("2006-01")
+		prevMonth2 := now.AddDate(0, -2, 0).Format("2006-01")
+
+		sampleExpenses := []models.InfrastructureCost{
+			{
+				ID:           "cost_infra_01",
+				Category:     models.ExpenseCategoryDatabase,
+				Title:        "Supabase Managed PostgreSQL Compute & Storage",
+				Vendor:       "Supabase Inc.",
+				Amount:       385000,
+				BillingCycle: "monthly",
+				MonthPeriod:  currentMonth,
+				IncurredDate: now.AddDate(0, 0, -18),
+				Notes:        "Dedicated compute 2 vCPU, 4GB RAM, connection pooling & auto backup.",
+				CreatedBy:    "usr_superadmin_01",
+				CreatedAt:    now.AddDate(0, 0, -18),
+				UpdatedAt:    now.AddDate(0, 0, -18),
+			},
+			{
+				ID:           "cost_infra_02",
+				Category:     models.ExpenseCategoryServerVPS,
+				Title:        "Cloudflare Enterprise Edge & Worker Proxies",
+				Vendor:       "Cloudflare",
+				Amount:       310000,
+				BillingCycle: "monthly",
+				MonthPeriod:  currentMonth,
+				IncurredDate: now.AddDate(0, 0, -17),
+				Notes:        "Global edge caching, DDoS protection, edge routing latency under 15ms.",
+				CreatedBy:    "usr_superadmin_01",
+				CreatedAt:    now.AddDate(0, 0, -17),
+				UpdatedAt:    now.AddDate(0, 0, -17),
+			},
+			{
+				ID:           "cost_infra_03",
+				Category:     models.ExpenseCategoryDomainDNS,
+				Title:        "Custom Domain DNS & Wildcard SSL Automation",
+				Vendor:       "Cloudflare for SaaS",
+				Amount:       145000,
+				BillingCycle: "monthly",
+				MonthPeriod:  currentMonth,
+				IncurredDate: now.AddDate(0, 0, -15),
+				Notes:        "Automated custom domain SSL certificate provisioning for Pro subscribers.",
+				CreatedBy:    "usr_superadmin_01",
+				CreatedAt:    now.AddDate(0, 0, -15),
+				UpdatedAt:    now.AddDate(0, 0, -15),
+			},
+			{
+				ID:           "cost_infra_04",
+				Category:     models.ExpenseCategoryEmailSMTP,
+				Title:        "Resend Pro Transactional Email Gateway",
+				Vendor:       "Resend",
+				Amount:       155000,
+				BillingCycle: "monthly",
+				MonthPeriod:  currentMonth,
+				IncurredDate: now.AddDate(0, 0, -14),
+				Notes:        "Email verification, billing receipts, domain notifications & password reset.",
+				CreatedBy:    "usr_superadmin_01",
+				CreatedAt:    now.AddDate(0, 0, -14),
+				UpdatedAt:    now.AddDate(0, 0, -14),
+			},
+			{
+				ID:           "cost_infra_05",
+				Category:     models.ExpenseCategoryPaymentFee,
+				Title:        "Midtrans & QRIS Payment Gateway MDR Interchange",
+				Vendor:       "Midtrans / Bank Indonesia",
+				Amount:       48500,
+				BillingCycle: "monthly",
+				MonthPeriod:  currentMonth,
+				IncurredDate: now.AddDate(0, 0, -10),
+				Notes:        "0.7% QRIS fee and IDR 4.000 VA interchange per settled invoice.",
+				CreatedBy:    "usr_superadmin_01",
+				CreatedAt:    now.AddDate(0, 0, -10),
+				UpdatedAt:    now.AddDate(0, 0, -10),
+			},
+			{
+				ID:           "cost_infra_06",
+				Category:     models.ExpenseCategorySecuritySSL,
+				Title:        "Sentry Application Performance & Error Monitoring",
+				Vendor:       "Sentry.io",
+				Amount:       180000,
+				BillingCycle: "monthly",
+				MonthPeriod:  currentMonth,
+				IncurredDate: now.AddDate(0, 0, -8),
+				Notes:        "Full-stack APM, tracing, and alert dispatching.",
+				CreatedBy:    "usr_superadmin_01",
+				CreatedAt:    now.AddDate(0, 0, -8),
+				UpdatedAt:    now.AddDate(0, 0, -8),
+			},
+			{
+				ID:           "cost_infra_prev1_01",
+				Category:     models.ExpenseCategoryDatabase,
+				Title:        "Supabase Managed PostgreSQL Compute",
+				Vendor:       "Supabase Inc.",
+				Amount:       385000,
+				BillingCycle: "monthly",
+				MonthPeriod:  prevMonth1,
+				IncurredDate: now.AddDate(0, -1, -15),
+				Notes:        "Database monthly operational cost.",
+				CreatedBy:    "usr_superadmin_01",
+				CreatedAt:    now.AddDate(0, -1, -15),
+				UpdatedAt:    now.AddDate(0, -1, -15),
+			},
+			{
+				ID:           "cost_infra_prev1_02",
+				Category:     models.ExpenseCategoryServerVPS,
+				Title:        "Cloudflare Edge Hosting & Bandwidth",
+				Vendor:       "Cloudflare",
+				Amount:       310000,
+				BillingCycle: "monthly",
+				MonthPeriod:  prevMonth1,
+				IncurredDate: now.AddDate(0, -1, -15),
+				Notes:        "Edge CDN and compute.",
+				CreatedBy:    "usr_superadmin_01",
+				CreatedAt:    now.AddDate(0, -1, -15),
+				UpdatedAt:    now.AddDate(0, -1, -15),
+			},
+			{
+				ID:           "cost_infra_prev2_01",
+				Category:     models.ExpenseCategoryDatabase,
+				Title:        "Supabase Managed PostgreSQL Compute",
+				Vendor:       "Supabase Inc.",
+				Amount:       385000,
+				BillingCycle: "monthly",
+				MonthPeriod:  prevMonth2,
+				IncurredDate: now.AddDate(0, -2, -15),
+				Notes:        "Database monthly operational cost.",
+				CreatedBy:    "usr_superadmin_01",
+				CreatedAt:    now.AddDate(0, -2, -15),
+				UpdatedAt:    now.AddDate(0, -2, -15),
+			},
+		}
+		db.Create(&sampleExpenses)
+		log.Println("🌱 [Seeder] Seeded infrastructure and operational costs")
+	}
+
+	// 15. Ensure existing invoices have PaymentChannel populated
+	db.Model(&models.Invoice{}).Where("payment_channel = '' OR payment_channel IS NULL").Update("payment_channel", "qris")
+
+	// 16. Seed Support Canned Responses (Readme 3.8)
+	var cannedCount int64
+	db.Model(&models.CannedResponse{}).Count(&cannedCount)
+	if cannedCount == 0 {
+		now := time.Now()
+		canned := []models.CannedResponse{
+			{
+				ID:        "can_01",
+				Title:     "Salam Pembuka Ramah",
+				Category:  "general",
+				Shortcut:  "/halo",
+				Content:   "Halo Kak! Terima kasih telah menghubungi layanan bantuan Klikin. Ada yang bisa kami bantu terkait akun atau halaman bio Anda hari ini?",
+				CreatedBy: "admin@klikin.id",
+				CreatedAt: now.AddDate(0, 0, -10),
+				UpdatedAt: now.AddDate(0, 0, -10),
+			},
+			{
+				ID:        "can_02",
+				Title:     "Panduan CNAME Domain Kustom",
+				Category:  "domain",
+				Shortcut:  "/dns",
+				Content:   "Halo Kak! Untuk menghubungkan domain kustom ke Klikin, silakan buka DNS Management penyedia domain Anda dan tambahkan CNAME Record: Host: @ (atau subdomain pilihan) menuju target: cname.klikin.id. Propagasi DNS umumnya memakan waktu antara 15 menit hingga maksimal 24 jam.",
+				CreatedBy: "admin@klikin.id",
+				CreatedAt: now.AddDate(0, 0, -9),
+				UpdatedAt: now.AddDate(0, 0, -9),
+			},
+			{
+				ID:        "can_03",
+				Title:     "Informasi Faktur & Tagihan",
+				Category:  "billing",
+				Shortcut:  "/billing",
+				Content:   "Halo Kak! Riwayat tagihan dan invoice resmi berlangganan Klikin Pro dapat diunduh langsung melalui dashboard di menu Pengaturan Akun > Tagihan & Invoice. Jika ada kendala pembayaran otomatis, sistem kami siap membantu verifikasi manual.",
+				CreatedBy: "admin@klikin.id",
+				CreatedAt: now.AddDate(0, 0, -8),
+				UpdatedAt: now.AddDate(0, 0, -8),
+			},
+			{
+				ID:        "can_04",
+				Title:     "Instruksi Reset Password",
+				Category:  "technical",
+				Shortcut:  "/reset-pass",
+				Content:   "Halo Kak! Demi keamanan akun Anda, silakan gunakan tautan Lupa Password di halaman masuk Klikin untuk menerima tautan pembaruan kata sandi baru ke email yang terdaftar.",
+				CreatedBy: "admin@klikin.id",
+				CreatedAt: now.AddDate(0, 0, -7),
+				UpdatedAt: now.AddDate(0, 0, -7),
+			},
+			{
+				ID:        "can_05",
+				Title:     "Eksklusif Fitur Klikin Pro",
+				Category:  "feature",
+				Shortcut:  "/upgrade-pro",
+				Content:   "Halo Kak! Fitur domain kustom mandiri, penghapusan watermark Klikin, dan analitik pengunjung mendalam tersedia secara eksklusif untuk pengguna paket Klikin Pro. Anda dapat melakukan aktivasi instan melalui menu Langganan.",
+				CreatedBy: "admin@klikin.id",
+				CreatedAt: now.AddDate(0, 0, -6),
+				UpdatedAt: now.AddDate(0, 0, -6),
+			},
+		}
+		db.Create(&canned)
+		log.Println("🌱 [Seeder] Seeded support canned responses")
+	}
+
+	// 17. Seed Additional Support Tickets for Realistic Inbox (Readme 3.8)
+	var totalTickets int64
+	db.Model(&models.SupportTicket{}).Count(&totalTickets)
+	if totalTickets < 4 {
+		now := time.Now()
+		tickets := []models.SupportTicket{
+			{
+				ID:           "tkt_sample_02",
+				UserID:       "usr_owner_kopi",
+				TicketNumber: "TKT-2026-0215",
+				Subject:      "Kendala propagasi SSL pada domain kedai-kopi.com",
+				Category:     "domain",
+				Priority:     "high",
+				Status:       models.TicketStatusInProgress,
+				Description:  "Halo, saya sudah update CNAME record sejak kemarin sore tapi status SSL di dashboard Klikin masih menunjukkan tanda peringatan kuning.",
+				CreatedAt:    now.Add(-6 * time.Hour),
+				UpdatedAt:    now.Add(-2 * time.Hour),
+			},
+			{
+				ID:           "tkt_sample_03",
+				UserID:       "usr_owner_creator",
+				TicketNumber: "TKT-2026-0301",
+				Subject:      "Permintaan faktur pajak untuk pembayaran langganan tahunan",
+				Category:     "billing",
+				Priority:     "medium",
+				Status:       models.TicketStatusOpen,
+				Description:  "Selamat siang tim Klikin, kami membutuhkan faktur pajak perusahaan untuk pembayaran langganan Pro tahunan kami yang baru saja berhasil dibayarkan.",
+				CreatedAt:    now.Add(-3 * time.Hour),
+				UpdatedAt:    now.Add(-3 * time.Hour),
+			},
+			{
+				ID:           "tkt_sample_04",
+				UserID:       "usr_owner_creator",
+				TicketNumber: "TKT-2026-0302",
+				Subject:      "Saran penambahan blok integrasi Spotify Podcast",
+				Category:     "feature",
+				Priority:     "low",
+				Status:       models.TicketStatusOpen,
+				Description:  "Apakah ada rencana menambahkan widget pemutar audio langsung dari Spotify untuk halaman bio kreator?",
+				CreatedAt:    now.Add(-1 * time.Hour),
+				UpdatedAt:    now.Add(-1 * time.Hour),
+			},
+			{
+				ID:           "tkt_sample_05",
+				UserID:       "usr_owner_kopi",
+				TicketNumber: "TKT-2026-0188",
+				Subject:      "Gagal upload favicon format ico",
+				Category:     "bug",
+				Priority:     "urgent",
+				Status:       models.TicketStatusResolved,
+				Description:  "Saat upload icon favicon format .ico muncul notifikasi format tidak didukung, padahal di petunjuk tertulis boleh format ico.",
+				CreatedAt:    now.AddDate(0, 0, -5),
+				UpdatedAt:    now.AddDate(0, 0, -4),
+			},
+		}
+
+		for _, t := range tickets {
+			var exists int64
+			db.Model(&models.SupportTicket{}).Where("id = ?", t.ID).Count(&exists)
+			if exists == 0 {
+				db.Create(&t)
+			}
+		}
+
+		// Messages for tkt_sample_02
+		var msg02Count int64
+		db.Model(&models.TicketMessage{}).Where("ticket_id = ?", "tkt_sample_02").Count(&msg02Count)
+		if msg02Count == 0 {
+			msgs02 := []models.TicketMessage{
+				{
+					ID:         "msg_s02_1",
+					TicketID:   "tkt_sample_02",
+					SenderType: "user",
+					SenderName: "Kopi Seduh Nusantara",
+					Message:    "Halo, saya sudah update CNAME record sejak kemarin sore tapi status SSL di dashboard Klikin masih menunjukkan tanda peringatan kuning.",
+					CreatedAt:  now.Add(-6 * time.Hour),
+				},
+				{
+					ID:         "msg_s02_2",
+					TicketID:   "tkt_sample_02",
+					SenderType: "support",
+					SenderName: "Super Administrator",
+					Message:    "Halo Kak! Kami sedang melakukan pengecekan DNS lookup ke nameserver Cloudflare domain Anda. Sertifikat SSL Let's Encrypt sedang dalam antrean penerbitan.",
+					CreatedAt:  now.Add(-2 * time.Hour),
+				},
+			}
+			db.Create(&msgs02)
+		}
+
+		// Messages for tkt_sample_03
+		var msg03Count int64
+		db.Model(&models.TicketMessage{}).Where("ticket_id = ?", "tkt_sample_03").Count(&msg03Count)
+		if msg03Count == 0 {
+			msg03 := models.TicketMessage{
+				ID:         "msg_s03_1",
+				TicketID:   "tkt_sample_03",
+				SenderType: "user",
+				SenderName: "Sarah Alatas",
+				Message:    "Selamat siang tim Klikin, kami membutuhkan faktur pajak perusahaan untuk pembayaran langganan Pro tahunan kami yang baru saja berhasil dibayarkan.",
+				CreatedAt:  now.Add(-3 * time.Hour),
+			}
+			db.Create(&msg03)
+		}
+
+		// Messages for tkt_sample_04
+		var msg04Count int64
+		db.Model(&models.TicketMessage{}).Where("ticket_id = ?", "tkt_sample_04").Count(&msg04Count)
+		if msg04Count == 0 {
+			msg04 := models.TicketMessage{
+				ID:         "msg_s04_1",
+				TicketID:   "tkt_sample_04",
+				SenderType: "user",
+				SenderName: "Sarah Alatas",
+				Message:    "Apakah ada rencana menambahkan widget pemutar audio langsung dari Spotify untuk halaman bio kreator?",
+				CreatedAt:  now.Add(-1 * time.Hour),
+			}
+			db.Create(&msg04)
+		}
+
+		log.Println("🌱 [Seeder] Seeded realistic support ticket threads")
+	}
+
+	// 18. Seed Broadcast Announcements & Communication Logs (Readme 3.8)
+	var bcCount int64
+	db.Model(&models.BroadcastAnnouncement{}).Count(&bcCount)
+	if bcCount == 0 {
+		now := time.Now()
+		broadcasts := []models.BroadcastAnnouncement{
+			{
+				ID:            "bc_01",
+				Title:         "Pembaruan Infrastruktur Domain & Kecepatan CDN Global",
+				TargetSegment: "all",
+				Channel:       "in_app",
+				Message:       "Kami telah meningkatkan routing edge network Klikin untuk akses 40% lebih cepat bagi pengunjung halaman bio Anda di seluruh Indonesia.",
+				ActionURL:     "/settings/domain",
+				SentCount:     145,
+				Status:        "sent",
+				CreatedBy:     "admin@klikin.id",
+				SentAt:        now.AddDate(0, 0, -4),
+				CreatedAt:     now.AddDate(0, 0, -4),
+			},
+			{
+				ID:            "bc_02",
+				Title:         "Fitur Baru: Integrasi Meta Pixel & TikTok Pixel Otomatis",
+				TargetSegment: "pro",
+				Channel:       "both",
+				Message:       "Kini pengguna Klikin Pro dapat menautkan Pixel periklanan tanpa koding untuk melacak konversi pengunjung secara real-time.",
+				ActionURL:     "/settings/page-settings",
+				SentCount:     88,
+				Status:        "sent",
+				CreatedBy:     "admin@klikin.id",
+				SentAt:        now.AddDate(0, 0, -2),
+				CreatedAt:     now.AddDate(0, 0, -2),
+			},
+		}
+		db.Create(&broadcasts)
+
+		commLogs := []models.CommunicationAuditLog{
+			{
+				ID:          "comm_sample_01",
+				ActionType:  "broadcast",
+				Recipient:   "Segment: all (145 penerima)",
+				TargetID:    "bc_01",
+				Subject:     "Pembaruan Infrastruktur Domain & Kecepatan CDN Global",
+				Channel:     "in_app",
+				Status:      "delivered",
+				AdminEmail:  "admin@klikin.id",
+				DetailsJSON: `{"recipients_count":145,"target_segment":"all"}`,
+				CreatedAt:   now.AddDate(0, 0, -4),
+			},
+			{
+				ID:          "comm_sample_02",
+				ActionType:  "broadcast",
+				Recipient:   "Segment: pro (88 penerima)",
+				TargetID:    "bc_02",
+				Subject:     "Fitur Baru: Integrasi Meta Pixel & TikTok Pixel Otomatis",
+				Channel:     "both",
+				Status:      "delivered",
+				AdminEmail:  "admin@klikin.id",
+				DetailsJSON: `{"recipients_count":88,"target_segment":"pro"}`,
+				CreatedAt:   now.AddDate(0, 0, -2),
+			},
+			{
+				ID:          "comm_sample_03",
+				ActionType:  "ticket_reply",
+				Recipient:   "usr_owner_kopi",
+				TargetID:    "tkt_sample_02",
+				Subject:     "Kendala propagasi SSL pada domain kedai-kopi.com",
+				Channel:     "dashboard_thread",
+				Status:      "delivered",
+				AdminEmail:  "admin@klikin.id",
+				DetailsJSON: `{"ticket_number":"TKT-2026-0215"}`,
+				CreatedAt:   now.Add(-2 * time.Hour),
+			},
+		}
+		db.Create(&commLogs)
+		log.Println("🌱 [Seeder] Seeded broadcast announcements and communication audit logs")
+	}
+
+	// 19. Seed Security & Audit Data (Readme 3.10)
+	var policyCount int64
+	db.Model(&models.SecurityPolicy{}).Count(&policyCount)
+	if policyCount == 0 {
+		defaultPolicy := models.SecurityPolicy{
+			ID:                      "sec_policy_default",
+			Require2FAForSuperAdmin: true,
+			MaxFailedLoginAttempts:  5,
+			RateLimitRequestsPerMin: 120,
+			SessionTimeoutHours:     24,
+			AutoIPBlockOnBruteForce: true,
+			UpdatedAt:               time.Now(),
+		}
+		db.Create(&defaultPolicy)
+		log.Println("🌱 [Seeder] Seeded default security policy")
+	}
+
+	var auditCount int64
+	db.Model(&models.PlatformAuditLog{}).Count(&auditCount)
+	if auditCount == 0 {
+		now := time.Now()
+		audits := []models.PlatformAuditLog{
+			{
+				ID:          "audit_01",
+				ActorID:     "usr_superadmin_01",
+				ActorEmail:  "admin@klikin.id",
+				ActorRole:   "SUPER_ADMIN",
+				Action:      "SECURITY_POLICY_UPDATED",
+				TargetType:  "security",
+				TargetID:    "sec_policy_default",
+				IPAddress:   "127.0.0.1",
+				DetailsJSON: `{"enforce_2fa":true,"session_timeout_hours":24}`,
+				CreatedAt:   now.Add(-24 * time.Hour),
+			},
+			{
+				ID:          "audit_02",
+				ActorID:     "usr_superadmin_01",
+				ActorEmail:  "admin@klikin.id",
+				ActorRole:   "SUPER_ADMIN",
+				Action:      "IP_BLACKLISTED",
+				TargetType:  "security",
+				TargetID:    "198.51.100.44",
+				IPAddress:   "127.0.0.1",
+				DetailsJSON: `{"reason":"Repeated unauthorized auth probing","hits":42}`,
+				CreatedAt:   now.Add(-18 * time.Hour),
+			},
+			{
+				ID:          "audit_03",
+				ActorID:     "usr_superadmin_01",
+				ActorEmail:  "admin@klikin.id",
+				ActorRole:   "SUPER_ADMIN",
+				Action:      "BACKUP_TRIGGERED",
+				TargetType:  "backup",
+				TargetID:    "bkp_20261022_manual",
+				IPAddress:   "127.0.0.1",
+				DetailsJSON: `{"backup_type":"manual","scope":"full_database"}`,
+				CreatedAt:   now.Add(-12 * time.Hour),
+			},
+			{
+				ID:          "audit_04",
+				ActorID:     "usr_superadmin_01",
+				ActorEmail:  "admin@klikin.id",
+				ActorRole:   "SUPER_ADMIN",
+				Action:      "BROADCAST_SENT",
+				TargetType:  "broadcast",
+				TargetID:    "bc_02",
+				IPAddress:   "127.0.0.1",
+				DetailsJSON: `{"title":"Fitur Baru: Integrasi Meta Pixel","recipients":88}`,
+				CreatedAt:   now.Add(-6 * time.Hour),
+			},
+			{
+				ID:          "audit_05",
+				ActorID:     "usr_superadmin_01",
+				ActorEmail:  "admin@klikin.id",
+				ActorRole:   "SUPER_ADMIN",
+				Action:      "SUPPORT_TICKET_REPLIED",
+				TargetType:  "support",
+				TargetID:    "tkt_sample_02",
+				IPAddress:   "127.0.0.1",
+				DetailsJSON: `{"ticket_number":"TKT-2026-0215","status":"in_progress"}`,
+				CreatedAt:   now.Add(-2 * time.Hour),
+			},
+		}
+		db.Create(&audits)
+		log.Println("🌱 [Seeder] Seeded platform audit logs")
+	}
+
+	var loginCount int64
+	db.Model(&models.LoginHistoryLog{}).Count(&loginCount)
+	if loginCount == 0 {
+		now := time.Now()
+		logins := []models.LoginHistoryLog{
+			{
+				ID:            "log_login_01",
+				UserID:        "usr_superadmin_01",
+				UserEmail:     "admin@klikin.id",
+				IPAddress:     "127.0.0.1",
+				UserAgent:     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+				DeviceType:    "desktop",
+				Location:      "Jakarta, Indonesia",
+				Status:        "success",
+				FailureReason: "",
+				CreatedAt:     now.Add(-30 * time.Minute),
+			},
+			{
+				ID:            "log_login_02",
+				UserID:        "usr_owner_kopi",
+				UserEmail:     "owner@klikin.id",
+				IPAddress:     "180.244.135.22",
+				UserAgent:     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+				DeviceType:    "desktop",
+				Location:      "Bandung, Indonesia",
+				Status:        "success",
+				FailureReason: "",
+				CreatedAt:     now.Add(-2 * time.Hour),
+			},
+			{
+				ID:            "log_login_03",
+				UserID:        "",
+				UserEmail:     "unknown.attacker@protonmail.com",
+				IPAddress:     "198.51.100.44",
+				UserAgent:     "Python-requests/2.31.0",
+				DeviceType:    "desktop",
+				Location:      "Frankfurt, Germany",
+				Status:        "failed",
+				FailureReason: "User not found or invalid credentials",
+				CreatedAt:     now.Add(-5 * time.Hour),
+			},
+			{
+				ID:            "log_login_04",
+				UserID:        "usr_owner_creator",
+				UserEmail:     "creator@klikin.id",
+				IPAddress:     "114.122.38.10",
+				UserAgent:     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148",
+				DeviceType:    "mobile",
+				Location:      "Surabaya, Indonesia",
+				Status:        "success",
+				FailureReason: "",
+				CreatedAt:     now.Add(-7 * time.Hour),
+			},
+			{
+				ID:            "log_login_05",
+				UserID:        "",
+				UserEmail:     "root@klikin.id",
+				IPAddress:     "198.51.100.44",
+				UserAgent:     "curl/8.4.0",
+				DeviceType:    "desktop",
+				Location:      "Frankfurt, Germany",
+				Status:        "failed",
+				FailureReason: "Brute-force limit triggered",
+				CreatedAt:     now.Add(-8 * time.Hour),
+			},
+		}
+		db.Create(&logins)
+		log.Println("🌱 [Seeder] Seeded login history logs")
+	}
+
+	var errLogCount int64
+	db.Model(&models.AppErrorLog{}).Count(&errLogCount)
+	if errLogCount == 0 {
+		now := time.Now()
+		resTime := now.Add(-3 * time.Hour)
+		errors := []models.AppErrorLog{
+			{
+				ID:          "err_log_01",
+				Severity:    "warning",
+				Message:     "Rate limit threshold 80% reached for IP 114.122.38.10",
+				StackTrace:  "middleware.RateLimiter() -> controllers.PublicPageView() at ratelimit.go:58",
+				Endpoint:    "/api/v1/pages/kopiseduh",
+				Method:      "GET",
+				StatusCode:  429,
+				UserID:      "",
+				IPAddress:   "114.122.38.10",
+				Resolved:    true,
+				ResolvedBy:  "admin@klikin.id",
+				ResolvedAt:  &resTime,
+				CreatedAt:   now.Add(-4 * time.Hour),
+			},
+			{
+				ID:          "err_log_02",
+				Severity:    "error",
+				Message:     "DNS CNAME lookup timed out after 3000ms for custom domain kedai-kopi.com",
+				StackTrace:  "services.VerifyDNS() at domain_service.go:142\nnet.LookupCNAME(\"kedai-kopi.com\")\ncontext deadline exceeded",
+				Endpoint:    "/api/v1/domains/verify",
+				Method:      "POST",
+				StatusCode:  504,
+				UserID:      "usr_owner_kopi",
+				IPAddress:   "180.244.135.22",
+				Resolved:    false,
+				CreatedAt:   now.Add(-2 * time.Hour),
+			},
+			{
+				ID:          "err_log_03",
+				Severity:    "critical",
+				Message:     "Midtrans webhook signature validation mismatch for order ORDER-KLIKIN-8891",
+				StackTrace:  "controllers.MidtransWebhook() at payment_controller.go:88\ncrypto.SHA512 mismatch: computed hash does not match payload signature",
+				Endpoint:    "/api/v1/webhooks/midtrans",
+				Method:      "POST",
+				StatusCode:  400,
+				UserID:      "",
+				IPAddress:   "103.208.23.6",
+				Resolved:    false,
+				CreatedAt:   now.Add(-45 * time.Minute),
+			},
+		}
+		db.Create(&errors)
+		log.Println("🌱 [Seeder] Seeded application error logs")
+	}
+
+	var blacklistCount int64
+	db.Model(&models.BlacklistedIP{}).Count(&blacklistCount)
+	if blacklistCount == 0 {
+		now := time.Now()
+		lastHit := now.Add(-30 * time.Minute)
+		expiry := now.AddDate(0, 1, 0)
+		blacklists := []models.BlacklistedIP{
+			{
+				ID:        "bl_ip_01",
+				IPAddress: "198.51.100.44",
+				Reason:    "Brute force credential stuffing attacks on /api/auth/login",
+				TotalHits: 142,
+				LastHitAt: &lastHit,
+				BlockedAt: now.Add(-18 * time.Hour),
+				ExpiresAt: &expiry,
+				IsActive:  true,
+				CreatedBy: "admin@klikin.id",
+				CreatedAt: now.Add(-18 * time.Hour),
+				UpdatedAt: now.Add(-30 * time.Minute),
+			},
+			{
+				ID:        "bl_ip_02",
+				IPAddress: "203.0.113.88",
+				Reason:    "Malicious web vulnerability scanning and path traversal attempts",
+				TotalHits: 29,
+				LastHitAt: &lastHit,
+				BlockedAt: now.Add(-48 * time.Hour),
+				ExpiresAt: nil,
+				IsActive:  true,
+				CreatedBy: "admin@klikin.id",
+				CreatedAt: now.Add(-48 * time.Hour),
+				UpdatedAt: now.Add(-2 * time.Hour),
+			},
+		}
+		db.Create(&blacklists)
+		log.Println("🌱 [Seeder] Seeded blacklisted IP addresses")
+	}
+
+	var sessionCount int64
+	db.Model(&models.AdminSession{}).Count(&sessionCount)
+	if sessionCount == 0 {
+		now := time.Now()
+		sessions := []models.AdminSession{
+			{
+				ID:           "sess_admin_current",
+				AdminID:      "usr_superadmin_01",
+				AdminEmail:   "admin@klikin.id",
+				TokenSnippet: "eyJhbGciOi...9aB1",
+				IPAddress:    "127.0.0.1",
+				UserAgent:    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0",
+				Device:       "macOS / Chrome 120 (Sesi Ini)",
+				LastActiveAt: now,
+				ExpiresAt:    now.Add(24 * time.Hour),
+				IsRevoked:    false,
+				CreatedAt:    now.Add(-2 * time.Hour),
+			},
+			{
+				ID:           "sess_admin_secondary",
+				AdminID:      "usr_superadmin_01",
+				AdminEmail:   "admin@klikin.id",
+				TokenSnippet: "eyJhbGciOi...k8X2",
+				IPAddress:    "180.244.135.22",
+				UserAgent:    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) Mobile/15E148",
+				Device:       "iPhone 15 Pro / Safari Mobile",
+				LastActiveAt: now.Add(-5 * time.Hour),
+				ExpiresAt:    now.Add(19 * time.Hour),
+				IsRevoked:    false,
+				CreatedAt:    now.Add(-5 * time.Hour),
+			},
+		}
+		db.Create(&sessions)
+		log.Println("🌱 [Seeder] Seeded active admin sessions")
+	}
+
+	var backupCount int64
+	db.Model(&models.DataBackupRecord{}).Count(&backupCount)
+	if backupCount == 0 {
+		now := time.Now()
+		backups := []models.DataBackupRecord{
+			{
+				ID:            "bkp_20261020_auto",
+				BackupName:    "klikin-backup-scheduled-20261020.sql.gz",
+				BackupType:    "scheduled",
+				FileSizeBytes: 14285700,
+				Status:        "completed",
+				DownloadURL:   "/api/admin/security/backups/bkp_20261020_auto/download",
+				TriggeredBy:   "system_cron",
+				Notes:         "Daily automated cloud snapshot backup",
+				CreatedAt:     now.AddDate(0, 0, -2),
+			},
+			{
+				ID:            "bkp_20261022_manual",
+				BackupName:    "klikin-backup-manual-pre-migration.sql.gz",
+				BackupType:    "manual",
+				FileSizeBytes: 15124000,
+				Status:        "completed",
+				DownloadURL:   "/api/admin/security/backups/bkp_20261022_manual/download",
+				TriggeredBy:   "admin@klikin.id",
+				Notes:         "Manual schema & transactional data export by Super Admin",
+				CreatedAt:     now.Add(-12 * time.Hour),
+			},
+		}
+		db.Create(&backups)
+		log.Println("🌱 [Seeder] Seeded data backup records")
 	}
 
 	return nil

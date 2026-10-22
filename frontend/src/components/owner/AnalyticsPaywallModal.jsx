@@ -67,7 +67,7 @@ export default function AnalyticsPaywallModal({
           <div>
             <span className="text-[11px] text-slate-500 block">Langganan Klikin Pro</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-extrabold text-slate-900">Rp 49.000</span>
+              <span className="text-lg font-extrabold text-slate-900">Rp 29.000</span>
               <span className="text-xs text-slate-500 font-medium">/bulan</span>
             </div>
           </div>

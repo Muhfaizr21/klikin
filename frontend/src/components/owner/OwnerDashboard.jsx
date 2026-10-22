@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import OwnerSidebar from './OwnerSidebar';
 import OwnerHeader from './OwnerHeader';
 import StatCard from './StatCard';
@@ -10,18 +10,30 @@ import DailyMeetingCard from './DailyMeetingCard';
 import TopStoreTable from './TopStoreTable';
 import AudienceDeviceChart from './AudienceDeviceChart';
 import AddLinkModal from './AddLinkModal';
-import BioEditor from './editor/BioEditor';
-import OwnerAnalytics from './OwnerAnalytics';
-import OwnerCustomDomain from './OwnerCustomDomain';
-import OwnerEmailLeads from './OwnerEmailLeads';
-import OwnerBilling from './OwnerBilling';
-import OwnerPageSettings from './OwnerPageSettings';
-import OwnerAccountSettings from './OwnerAccountSettings';
-import OwnerNotifications from './OwnerNotifications';
-import OwnerSupport from './OwnerSupport';
 import { AlertCircleIcon, CheckIcon } from '../Icons';
 import { supabase } from '../../lib/supabase';
 import { API_BASE } from '../../lib/api';
+
+const BioEditor = lazy(() => import('./editor/BioEditor'));
+const OwnerAnalytics = lazy(() => import('./OwnerAnalytics'));
+const OwnerCustomDomain = lazy(() => import('./OwnerCustomDomain'));
+const OwnerEmailLeads = lazy(() => import('./OwnerEmailLeads'));
+const OwnerBilling = lazy(() => import('./OwnerBilling'));
+const OwnerPageSettings = lazy(() => import('./OwnerPageSettings'));
+const OwnerAccountSettings = lazy(() => import('./OwnerAccountSettings'));
+const OwnerNotifications = lazy(() => import('./OwnerNotifications'));
+const OwnerSupport = lazy(() => import('./OwnerSupport'));
+
+function OwnerViewLoader() {
+  return (
+    <div className="py-20 flex items-center justify-center">
+      <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-500">
+        <span className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-slate-900 animate-spin" />
+        <span>Memuat modul...</span>
+      </div>
+    </div>
+  );
+}
 
 const playNotificationChime = () => {
   try {
@@ -496,6 +508,7 @@ export default function OwnerDashboard({ user, token, onLogout, initialTab = 'da
           )}
 
           {/* Dynamic Content Based on Active Sidebar Tab */}
+          <Suspense fallback={<OwnerViewLoader />}>
           {activeTab === 'editor' || activeTab === 'links' ? (
             <BioEditor
               user={user}
@@ -638,6 +651,7 @@ export default function OwnerDashboard({ user, token, onLogout, initialTab = 'da
               </div>
             </div>
           )}
+          </Suspense>
         </div>
       </main>
 

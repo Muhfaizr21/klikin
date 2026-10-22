@@ -21,11 +21,11 @@ export default function OwnerEmailLeads({ user, token }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
-  const isPro = Boolean(user?.is_pro || overview?.is_pro);
-  const [paywallModalOpen, setPaywallModalOpen] = useState(false);
-
   // Overview & Stats
   const [overview, setOverview] = useState(null);
+
+  const isPro = Boolean(user?.is_pro || overview?.is_pro);
+  const [paywallModalOpen, setPaywallModalOpen] = useState(false);
 
   // Leads list state
   const [leads, setLeads] = useState([]);

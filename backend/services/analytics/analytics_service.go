@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -183,19 +184,87 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 		days = 1
 	}
 
-	// 3. Compute Summary via Single Database Aggregation
+	// 3-7. Execute Summary, RealtimeActive, DailyTimeline, Hourly, and LinkBreakdown concurrently in 1 network roundtrip
 	type SummaryResult struct {
 		PageViews      int64 `gorm:"column:page_views"`
 		TotalClicks    int64 `gorm:"column:total_clicks"`
 		UniqueVisitors int64 `gorm:"column:unique_visitors"`
 	}
-	var sumRes SummaryResult
-	err := s.db.Model(&models.AnalyticsEvent{}).
-		Select("COUNT(CASE WHEN type = 'view' THEN 1 END) AS page_views, COUNT(CASE WHEN type = 'click' THEN 1 END) AS total_clicks, COUNT(DISTINCT ip_hash) AS unique_visitors").
-		Where("page_id = ? AND created_at >= ? AND created_at <= ?", page.ID, start, end).
-		Scan(&sumRes).Error
-	if err != nil {
-		return nil, fmt.Errorf("gagal memuat ringkasan analitik: %w", err)
+	type DailyPoint struct {
+		DateStr string `gorm:"column:d"`
+		Views   int64  `gorm:"column:views"`
+		Clicks  int64  `gorm:"column:clicks"`
+	}
+	type HourlyRow struct {
+		H      int   `gorm:"column:h"`
+		Views  int64 `gorm:"column:views"`
+		Clicks int64 `gorm:"column:clicks"`
+	}
+	type LinkBreakdownRow struct {
+		Title   string `gorm:"column:title"`
+		URL     string `gorm:"column:url"`
+		BlockID string `gorm:"column:block_id"`
+		Clicks  int64  `gorm:"column:clicks"`
+	}
+
+	var (
+		sumRes         SummaryResult
+		sumErr         error
+		realtimeActive int64
+		dailyPoints    []DailyPoint
+		hourlyRows     []HourlyRow
+		linkRows       []LinkBreakdownRow
+		wg             sync.WaitGroup
+	)
+	fifteenMinutesAgo := time.Now().Add(-15 * time.Minute)
+
+	wg.Add(5)
+	go func() {
+		defer wg.Done()
+		sumErr = s.db.Model(&models.AnalyticsEvent{}).
+			Select("COUNT(CASE WHEN type = 'view' THEN 1 END) AS page_views, COUNT(CASE WHEN type = 'click' THEN 1 END) AS total_clicks, COUNT(DISTINCT ip_hash) AS unique_visitors").
+			Where("page_id = ? AND created_at >= ? AND created_at <= ?", page.ID, start, end).
+			Scan(&sumRes).Error
+	}()
+	go func() {
+		defer wg.Done()
+		s.db.Model(&models.AnalyticsEvent{}).
+			Where("page_id = ? AND created_at >= ?", page.ID, fifteenMinutesAgo).
+			Distinct("ip_hash").
+			Count(&realtimeActive)
+	}()
+	go func() {
+		defer wg.Done()
+		s.db.Model(&models.AnalyticsEvent{}).
+			Select("TO_CHAR(created_at, 'YYYY-MM-DD') AS d, COUNT(CASE WHEN type = 'view' THEN 1 END) AS views, COUNT(CASE WHEN type = 'click' THEN 1 END) AS clicks").
+			Where("page_id = ? AND created_at >= ? AND created_at <= ?", page.ID, start, end).
+			Group("d").
+			Order("d ASC").
+			Scan(&dailyPoints)
+	}()
+	go func() {
+		defer wg.Done()
+		s.db.Model(&models.AnalyticsEvent{}).
+			Select("EXTRACT(HOUR FROM created_at)::integer AS h, COUNT(CASE WHEN type = 'view' THEN 1 END) AS views, COUNT(CASE WHEN type = 'click' THEN 1 END) AS clicks").
+			Where("page_id = ? AND created_at >= ? AND created_at <= ?", page.ID, start, end).
+			Group("h").
+			Order("h ASC").
+			Scan(&hourlyRows)
+	}()
+	go func() {
+		defer wg.Done()
+		s.db.Model(&models.AnalyticsEvent{}).
+			Select("COALESCE(NULLIF(target_title, ''), NULLIF(target_url, ''), 'Tautan Langsung') AS title, COALESCE(target_url, '') AS url, COALESCE(block_id, '') AS block_id, COUNT(*) AS clicks").
+			Where("page_id = ? AND type = 'click' AND created_at >= ? AND created_at <= ?", page.ID, start, end).
+			Group("title, url, block_id").
+			Order("clicks DESC").
+			Limit(50).
+			Scan(&linkRows)
+	}()
+	wg.Wait()
+
+	if sumErr != nil {
+		return nil, fmt.Errorf("gagal memuat ringkasan analitik: %w", sumErr)
 	}
 
 	pageViews := sumRes.PageViews
@@ -205,28 +274,6 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 	if pageViews > 0 {
 		ctr = roundToTwo((float64(totalClicks) / float64(pageViews)) * 100)
 	}
-
-	// 4. Query Realtime Active (past 15 minutes)
-	fifteenMinutesAgo := time.Now().Add(-15 * time.Minute)
-	var realtimeActive int64
-	s.db.Model(&models.AnalyticsEvent{}).
-		Where("page_id = ? AND created_at >= ?", page.ID, fifteenMinutesAgo).
-		Distinct("ip_hash").
-		Count(&realtimeActive)
-
-	// 5. Build Continuous Timeline via SQL Aggregation
-	type DailyPoint struct {
-		DateStr string `gorm:"column:d"`
-		Views   int64  `gorm:"column:views"`
-		Clicks  int64  `gorm:"column:clicks"`
-	}
-	var dailyPoints []DailyPoint
-	s.db.Model(&models.AnalyticsEvent{}).
-		Select("TO_CHAR(created_at, 'YYYY-MM-DD') AS d, COUNT(CASE WHEN type = 'view' THEN 1 END) AS views, COUNT(CASE WHEN type = 'click' THEN 1 END) AS clicks").
-		Where("page_id = ? AND created_at >= ? AND created_at <= ?", page.ID, start, end).
-		Group("d").
-		Order("d ASC").
-		Scan(&dailyPoints)
 
 	dailyMap := make(map[string]DailyPoint)
 	for _, p := range dailyPoints {
@@ -251,20 +298,6 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 		curr = curr.AddDate(0, 0, 1)
 	}
 
-	// 6. Format 24-Hour Distribution via SQL Aggregation
-	type HourlyRow struct {
-		H      int   `gorm:"column:h"`
-		Views  int64 `gorm:"column:views"`
-		Clicks int64 `gorm:"column:clicks"`
-	}
-	var hourlyRows []HourlyRow
-	s.db.Model(&models.AnalyticsEvent{}).
-		Select("EXTRACT(HOUR FROM created_at)::integer AS h, COUNT(CASE WHEN type = 'view' THEN 1 END) AS views, COUNT(CASE WHEN type = 'click' THEN 1 END) AS clicks").
-		Where("page_id = ? AND created_at >= ? AND created_at <= ?", page.ID, start, end).
-		Group("h").
-		Order("h ASC").
-		Scan(&hourlyRows)
-
 	hourlyMap := make(map[int]HourlyRow)
 	for _, r := range hourlyRows {
 		hourlyMap[r.H] = r
@@ -280,22 +313,6 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 			Clicks: row.Clicks,
 		}
 	}
-
-	// 7. Format Links Breakdown via SQL Aggregation
-	type LinkBreakdownRow struct {
-		Title   string `gorm:"column:title"`
-		URL     string `gorm:"column:url"`
-		BlockID string `gorm:"column:block_id"`
-		Clicks  int64  `gorm:"column:clicks"`
-	}
-	var linkRows []LinkBreakdownRow
-	s.db.Model(&models.AnalyticsEvent{}).
-		Select("COALESCE(NULLIF(target_title, ''), NULLIF(target_url, ''), 'Tautan Langsung') AS title, COALESCE(target_url, '') AS url, COALESCE(block_id, '') AS block_id, COUNT(*) AS clicks").
-		Where("page_id = ? AND type = 'click' AND created_at >= ? AND created_at <= ?", page.ID, start, end).
-		Group("title, url, block_id").
-		Order("clicks DESC").
-		Limit(50).
-		Scan(&linkRows)
 
 	var linksBreakdown []LinkStatItem
 	for _, lr := range linkRows {
@@ -363,12 +380,23 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 	}
 
 	totalEvents := pageViews + totalClicks
-	trafficSources := queryMetrics("traffic_source", "Direct", totalEvents)
-	geoCountries := queryMetrics("country", "Indonesia", totalEvents)
-	geoCities := queryMetrics("city", "Jakarta", totalEvents)
-	devices := queryMetrics("device", "Mobile", totalEvents)
-	browsers := queryMetrics("browser", "Chrome", totalEvents)
-	referrers := queryMetrics("referrer", "Direct / Bookmark", totalEvents)
+	var (
+		trafficSources []MetricItem
+		geoCountries   []MetricItem
+		geoCities      []MetricItem
+		devices        []MetricItem
+		browsers       []MetricItem
+		referrers      []MetricItem
+		wgMetrics      sync.WaitGroup
+	)
+	wgMetrics.Add(6)
+	go func() { defer wgMetrics.Done(); trafficSources = queryMetrics("traffic_source", "Direct", totalEvents) }()
+	go func() { defer wgMetrics.Done(); geoCountries = queryMetrics("country", "Indonesia", totalEvents) }()
+	go func() { defer wgMetrics.Done(); geoCities = queryMetrics("city", "Jakarta", totalEvents) }()
+	go func() { defer wgMetrics.Done(); devices = queryMetrics("device", "Mobile", totalEvents) }()
+	go func() { defer wgMetrics.Done(); browsers = queryMetrics("browser", "Chrome", totalEvents) }()
+	go func() { defer wgMetrics.Done(); referrers = queryMetrics("referrer", "Direct / Bookmark", totalEvents) }()
+	wgMetrics.Wait()
 
 	resp := &AnalyticsResponse{
 		IsPro:     effectivePro,

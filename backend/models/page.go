@@ -44,6 +44,16 @@ type BioPage struct {
 	MetaPixelID         string     `gorm:"column:meta_pixel_id;type:varchar(64)" json:"meta_pixel_id"`
 	TikTokPixelID       string     `gorm:"column:tiktok_pixel_id;type:varchar(64)" json:"tiktok_pixel_id"`
 
+	// Moderasi Konten & Keamanan (Readme 3.5)
+	ModerationStatus    string     `gorm:"column:moderation_status;type:varchar(32);default:'clean'" json:"moderation_status"` // "clean" | "flagged" | "taken_down"
+	FlagCategory        string     `gorm:"column:flag_category;type:varchar(32)" json:"flag_category,omitempty"`               // "phishing" | "spam" | "adult" | "gambling" | "scam"
+	FlagReason          string     `gorm:"column:flag_reason;type:text" json:"flag_reason,omitempty"`
+	FlagSeverity        string     `gorm:"column:flag_severity;type:varchar(16);default:'medium'" json:"flag_severity,omitempty"` // "low" | "medium" | "high" | "critical"
+	FlaggedAt           *time.Time `gorm:"column:flagged_at" json:"flagged_at,omitempty"`
+	TakedownReason      string     `gorm:"column:takedown_reason;type:text" json:"takedown_reason,omitempty"`
+	TakenDownAt         *time.Time `gorm:"column:taken_down_at" json:"taken_down_at,omitempty"`
+	TakenDownBy         string     `gorm:"column:taken_down_by;type:varchar(64)" json:"taken_down_by,omitempty"`
+
 	Blocks          []BioBlock          `gorm:"foreignKey:PageID" json:"blocks,omitempty"`
 	Links           []Link              `gorm:"foreignKey:PageID" json:"links,omitempty"`
 	EmailCapture    *EmailCaptureConfig `gorm:"foreignKey:PageID" json:"email_capture,omitempty"`

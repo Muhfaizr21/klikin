@@ -29,6 +29,11 @@ type User struct {
 	Language          string     `gorm:"type:varchar(10);default:'id'" json:"language"`
 	TwoFactorEnabled  bool       `gorm:"default:false" json:"two_factor_enabled"`
 	PasswordChangedAt *time.Time `json:"password_changed_at,omitempty"`
+	Status            string     `gorm:"type:varchar(32);default:'active'" json:"status"` // "active" | "suspended" | "banned"
+	StatusReason      string     `gorm:"type:text" json:"status_reason,omitempty"`
+	IsVerified        bool       `gorm:"default:false" json:"is_verified"`
+	InternalNotes     string     `gorm:"type:text" json:"internal_notes,omitempty"`
+	DeletedAt         *time.Time `gorm:"index" json:"deleted_at,omitempty"`
 	Pages             []BioPage  `gorm:"foreignKey:UserID" json:"pages,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`

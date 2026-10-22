@@ -123,6 +123,15 @@ func (s *PageSettingsService) UpdateSlug(userID string, newSlug string) (string,
 		return "", errors.New("slug ini merupakan kata khusus sistem dan tidak dapat digunakan")
 	}
 
+	var setting models.PlatformSetting
+	if err := s.db.Select("reserved_subdomains").First(&setting).Error; err == nil && setting.ReservedSubdomains != "" {
+		for _, rSlug := range strings.Split(setting.ReservedSubdomains, ",") {
+			if strings.EqualFold(strings.TrimSpace(rSlug), cleanSlug) {
+				return "", errors.New("slug ini dicadangkan oleh sistem Klikin dan tidak dapat digunakan")
+			}
+		}
+	}
+
 	// Check if already taken by another bio page
 	var count int64
 	s.db.Model(&models.BioPage{}).Where("slug = ? AND user_id != ?", cleanSlug, userID).Count(&count)

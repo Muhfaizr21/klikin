@@ -52,7 +52,8 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
     try {
       const endpoint = mode === 'register' ? `${API_BASE}/auth/register` : `${API_BASE}/auth/login`;
       const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
-      const derivedUsername = (email.split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const claimedSlug = localStorage.getItem('klikin_claimed_slug');
+      const derivedUsername = (claimedSlug || email.split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9_-]/g, '');
 
       const payload = mode === 'register'
         ? {
@@ -86,6 +87,10 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
           ? 'Registrasi berhasil! Membuka dashboard...'
           : `Login berhasil sebagai ${user.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Owner'}! Membuka workspace...`,
       });
+
+      if (mode === 'register') {
+        localStorage.removeItem('klikin_claimed_slug');
+      }
 
       if (onAuthSuccess) {
         setTimeout(() => {

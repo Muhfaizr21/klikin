@@ -17,6 +17,7 @@ import {
   GlobeIcon,
   VerifiedBadgeIcon,
   LockIcon,
+  ShieldAlertIcon,
 } from './Icons';
 import { API_BASE } from '../lib/api';
 
@@ -36,6 +37,16 @@ export default function PublicBioPage({ slug, onBackToHome }) {
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [leadSuccessMsg, setLeadSuccessMsg] = useState(null);
   const [leadError, setLeadError] = useState(null);
+
+  // Visitor Content Report State (Synced with Super Admin Moderation Module 3.5)
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportCategory, setReportCategory] = useState('phishing');
+  const [reportReason, setReportReason] = useState('');
+  const [reportedUrl, setReportedUrl] = useState('');
+  const [reporterEmail, setReporterEmail] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportSuccess, setReportSuccess] = useState(null);
+  const [reportError, setReportError] = useState(null);
 
   useEffect(() => {
     fetchPublicPage();
@@ -135,6 +146,37 @@ export default function PublicBioPage({ slug, onBackToHome }) {
       setUnlockError(err.message || 'Gagal membuka halaman');
     } finally {
       setUnlocking(false);
+    }
+  };
+
+  const handleReportSubmit = async (e) => {
+    e.preventDefault();
+    if (!reportReason.trim()) return;
+    setReportSubmitting(true);
+    setReportError(null);
+    try {
+      const res = await fetch(`${API_BASE}/public/reports`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: slug || page?.slug,
+          category: reportCategory,
+          reason: reportReason.trim(),
+          reported_url: reportedUrl.trim(),
+          reporter_email: reporterEmail.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Gagal mengirim laporan pelanggaran');
+      }
+      setReportSuccess(data.message || 'Laporan berhasil dikirim ke tim Trust & Safety Klikin.');
+      setReportReason('');
+      setReportedUrl('');
+    } catch (err) {
+      setReportError(err.message);
+    } finally {
+      setReportSubmitting(false);
     }
   };
 
@@ -340,7 +382,14 @@ export default function PublicBioPage({ slug, onBackToHome }) {
       }}
     >
       {custom_css && (
-        <style dangerouslySetInnerHTML={{ __html: custom_css }} />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: String(custom_css)
+              .replace(/<\/?style[^>]*>/gi, '')
+              .replace(/<\/?script[^>]*>/gi, '')
+              .replace(/javascript\s*:/gi, ''),
+          }}
+        />
       )}
 
       {/* Top Floating Mini Bar */}
@@ -643,20 +692,144 @@ export default function PublicBioPage({ slug, onBackToHome }) {
         </div>
       </main>
 
-      {/* Footer Branding Watermark - Only displayed for Free tier users */}
-      {!page?.is_pro && (
-        <footer className="w-full max-w-lg py-4 text-center text-xs opacity-60">
+      {/* Footer Branding Watermark & Trust/Safety Report Link */}
+      <footer className="w-full max-w-lg py-4 flex flex-col items-center gap-2 text-center text-xs">
+        {!page?.is_pro && (
           <a
             href="/"
             onClick={(e) => {
               e.preventDefault();
               onBackToHome();
             }}
-            className="font-mono text-[11px] font-semibold uppercase tracking-wider hover:opacity-100 transition-opacity"
+            className="font-mono text-[11px] font-semibold uppercase tracking-wider opacity-60 hover:opacity-100 transition-opacity"
           >
             Dibuat dengan Klikin
           </a>
-        </footer>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setReportSuccess(null);
+            setReportError(null);
+            setReportModalOpen(true);
+          }}
+          className="inline-flex items-center gap-1 text-[10px] font-medium opacity-45 hover:opacity-90 transition-opacity cursor-pointer"
+        >
+          <ShieldAlertIcon className="w-3 h-3" />
+          <span>Laporkan Halaman</span>
+        </button>
+      </footer>
+
+      {/* Visitor Report Abuse Modal */}
+      {reportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 text-slate-800 font-sans">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
+                  <ShieldAlertIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Laporkan Pelanggaran Konten</h3>
+                  <p className="text-[11px] text-slate-500">Halaman @{slug} akan ditinjau oleh Trust & Safety Klikin</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 text-xs font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {reportSuccess ? (
+              <div className="space-y-4 pt-1">
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs leading-relaxed">
+                  {reportSuccess}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReportModalOpen(false)}
+                  className="w-full py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleReportSubmit} className="space-y-3 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Kategori Pelanggaran</label>
+                  <select
+                    value={reportCategory}
+                    onChange={(e) => setReportCategory(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-hidden focus:border-slate-400"
+                  >
+                    <option value="phishing">Phishing / Penipuan / Scam</option>
+                    <option value="gambling">Judi Online / Taruhan Ilegal</option>
+                    <option value="adult">Konten Dewasa / Pornografi</option>
+                    <option value="spam">Spam / Malware / Tautan Mencurigakan</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Tautan Bermasalah (Opsional)</label>
+                  <input
+                    type="text"
+                    value={reportedUrl}
+                    onChange={(e) => setReportedUrl(e.target.value)}
+                    placeholder="Contoh: https://domain-mencurigakan.xyz"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 focus:outline-hidden focus:border-slate-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Detail Laporan *</label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    placeholder="Jelaskan indikasi pelanggaran pada halaman ini..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 focus:outline-hidden focus:border-slate-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Email Pelapor (Opsional)</label>
+                  <input
+                    type="email"
+                    value={reporterEmail}
+                    onChange={(e) => setReporterEmail(e.target.value)}
+                    placeholder="email@anda.com"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 focus:outline-hidden focus:border-slate-400"
+                  />
+                </div>
+
+                {reportError && (
+                  <p className="text-rose-600 font-semibold text-[11px]">{reportError}</p>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setReportModalOpen(false)}
+                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={reportSubmitting || !reportReason.trim()}
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold cursor-pointer"
+                  >
+                    {reportSubmitting ? 'Mengirim...' : 'Kirim Laporan'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

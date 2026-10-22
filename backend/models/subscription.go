@@ -10,6 +10,7 @@ const (
 	SubscriptionStatusTrial    SubscriptionStatus = "trial"
 	SubscriptionStatusPastDue  SubscriptionStatus = "past_due"
 	SubscriptionStatusCanceled SubscriptionStatus = "canceled"
+	SubscriptionStatusExpired  SubscriptionStatus = "expired"
 )
 
 // PlanType represents the tier
@@ -43,6 +44,9 @@ type Subscription struct {
 	StripeSubscriptionID string             `gorm:"type:varchar(128)" json:"stripe_subscription_id,omitempty"`
 	AppliedPromoCode     string             `gorm:"type:varchar(64)" json:"applied_promo_code,omitempty"`
 	DiscountPercent      int                `gorm:"default:0" json:"discount_percent"`
+	AdminNotes           string             `gorm:"type:text" json:"admin_notes,omitempty"`
+	LastReminderSentAt   *time.Time         `json:"last_reminder_sent_at,omitempty"`
+	DunningReminderCount int                `gorm:"default:0" json:"dunning_reminder_count"`
 	CreatedAt            time.Time          `json:"created_at"`
 	UpdatedAt            time.Time          `json:"updated_at"`
 }
@@ -58,11 +62,17 @@ type Invoice struct {
 	Amount         int64      `json:"amount"` // Subtotal
 	Tax            int64      `json:"tax"`    // PPN 11%
 	Total          int64      `json:"total"`  // Total with tax and discount
-	Status         string     `gorm:"type:varchar(32);default:'paid'" json:"status"` // "paid" | "pending" | "failed"
-	BillingReason  string     `gorm:"type:varchar(64)" json:"billing_reason"`       // "subscription_cycle", "upgrade", "new"
+	Status         string     `gorm:"type:varchar(32);default:'paid'" json:"status"` // "paid" | "pending" | "failed" | "refunded"
+	PaymentChannel string     `gorm:"type:varchar(32);default:'qris'" json:"payment_channel"` // "qris" | "bank_transfer" | "credit_card" | "e_wallet"
+	BillingReason  string     `gorm:"type:varchar(64)" json:"billing_reason"`       // "subscription_cycle", "upgrade", "new", "admin_manual", "admin_goodwill"
 	PaidAt         *time.Time `json:"paid_at,omitempty"`
-	PDFURL         string     `json:"pdf_url,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
+	RefundedAt     *time.Time `json:"refunded_at,omitempty"`
+	RefundReason   string     `gorm:"type:text" json:"refund_reason,omitempty"`
+	PDFURL          string     `json:"pdf_url,omitempty"`
+	SnapToken       string     `gorm:"type:varchar(255)" json:"snap_token,omitempty"`
+	SnapRedirectURL string     `gorm:"type:text" json:"snap_redirect_url,omitempty"`
+	Notes           string     `gorm:"type:text" json:"notes,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 // PromoCode stores discount vouchers

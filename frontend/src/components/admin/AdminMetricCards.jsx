@@ -8,11 +8,15 @@ import {
 } from '../Icons';
 
 export default function AdminMetricCards({ stats }) {
-  const mrrAmount = stats?.mrr
-    ? `Rp ${(stats.mrr * 1000).toLocaleString('id-ID')}`
-    : 'Rp 142.100.000';
+  const mrrAmount =
+    stats?.mrr !== undefined && stats?.mrr !== null
+      ? `Rp ${Number(stats.mrr).toLocaleString('id-ID')}`
+      : 'Rp 0';
 
-  const userCount = stats?.total_users ? `${stats.total_users} akun` : '38 akun';
+  const userCount =
+    stats?.total_users !== undefined && stats?.total_users !== null
+      ? `${stats.total_users} akun`
+      : '0 akun';
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">

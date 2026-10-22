@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import ProblemSolution from './components/ProblemSolution';
@@ -6,11 +6,23 @@ import Features from './components/Features';
 import Pricing from './components/Pricing';
 import FAQ from './components/FAQ';
 import Footer from './components/Footer';
-import AuthPage from './components/AuthPage';
-import Dashboard from './components/Dashboard';
-import PublicBioPage from './components/PublicBioPage';
 import { navigateTo, replaceTo } from './utils/navigation';
 import './App.css';
+
+const AuthPage = lazy(() => import('./components/AuthPage'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const PublicBioPage = lazy(() => import('./components/PublicBioPage'));
+
+function RouteFallback() {
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center bg-slate-50">
+      <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-500">
+        <span className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-slate-900 animate-spin" />
+        <span>Memuat halaman...</span>
+      </div>
+    </div>
+  );
+}
 
 const VALID_OWNER_TABS = [
   'dashboard',
@@ -74,9 +86,13 @@ function parseCurrentRoute() {
     const resolvedTab = TAB_ALIASES[rawTab] || (VALID_OWNER_TABS.includes(rawTab) ? rawTab : 'dashboard');
     return { view: 'dashboard', slug: '', tab: resolvedTab, legacyRedirect: null };
   }
-  if (lowerPath === '/admin' || lowerPath.startsWith('/admin/')) {
-    const rawTab = lowerPath.replace(/^\/admin\/?/, '').split('/')[0] || 'reports';
-    return { view: 'dashboard', slug: '', tab: rawTab, legacyRedirect: null };
+  if (lowerPath === '/admin' || lowerPath === '/admin/') {
+    return { view: 'dashboard', slug: '', tab: 'overview', legacyRedirect: '/admin/overview' };
+  }
+  if (lowerPath.startsWith('/admin/')) {
+    const rawTab = lowerPath.replace(/^\/admin\/?/, '').split('/')[0] || 'overview';
+    const resolvedTab = (rawTab === 'dashboard' || rawTab === 'index') ? 'overview' : rawTab;
+    return { view: 'dashboard', slug: '', tab: resolvedTab, legacyRedirect: null };
   }
 
   // 3. Single-segment public bio slug (e.g. /kopiseduh)
@@ -137,7 +153,11 @@ export default function App() {
   };
 
   const handleNavigateToDashboard = () => {
-    navigateTo('/owner/dashboard');
+    if (authUser?.role === 'SUPER_ADMIN') {
+      navigateTo('/admin/overview');
+    } else {
+      navigateTo('/owner/dashboard');
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -147,10 +167,16 @@ export default function App() {
     localStorage.setItem('klikin_user', JSON.stringify(user));
     localStorage.setItem('klikin_token', token);
 
-    // Check if user was trying to access a specific owner tab before auth
+    // Check if user was trying to access a specific owner or admin tab before auth
     const savedRedirect = sessionStorage.getItem('klikin_redirect_url');
     sessionStorage.removeItem('klikin_redirect_url');
-    const destination = savedRedirect && savedRedirect.startsWith('/owner') ? savedRedirect : '/owner/dashboard';
+
+    let destination = '/owner/dashboard';
+    if (user?.role === 'SUPER_ADMIN') {
+      destination = savedRedirect && savedRedirect.startsWith('/admin') ? savedRedirect : '/admin/overview';
+    } else {
+      destination = savedRedirect && savedRedirect.startsWith('/owner') ? savedRedirect : '/owner/dashboard';
+    }
 
     navigateTo(destination);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -169,10 +195,12 @@ export default function App() {
   // 1. Public Bio Page route (/p/:slug or /:slug)
   if (route.view === 'public_page') {
     return (
-      <PublicBioPage
-        slug={route.slug || 'kopiseduh'}
-        onBackToHome={handleBackToHome}
-      />
+      <Suspense fallback={<RouteFallback />}>
+        <PublicBioPage
+          slug={route.slug || 'kopiseduh'}
+          onBackToHome={handleBackToHome}
+        />
+      </Suspense>
     );
   }
 
@@ -182,33 +210,39 @@ export default function App() {
     if (!authToken || !authUser) {
       sessionStorage.setItem('klikin_redirect_url', window.location.pathname);
       return (
-        <AuthPage
-          initialMode="login"
-          onBackToHome={handleBackToHome}
-          onAuthSuccess={handleAuthSuccess}
-        />
+        <Suspense fallback={<RouteFallback />}>
+          <AuthPage
+            initialMode="login"
+            onBackToHome={handleBackToHome}
+            onAuthSuccess={handleAuthSuccess}
+          />
+        </Suspense>
       );
     }
 
     return (
-      <Dashboard
-        user={authUser}
-        token={authToken}
-        onLogout={handleLogout}
-        onBackToHome={handleBackToHome}
-        initialTab={route.tab}
-      />
+      <Suspense fallback={<RouteFallback />}>
+        <Dashboard
+          user={authUser}
+          token={authToken}
+          onLogout={handleLogout}
+          onBackToHome={handleBackToHome}
+          initialTab={route.tab}
+        />
+      </Suspense>
     );
   }
 
   // 3. Auth pages (/login or /register)
   if (route.view === 'login' || route.view === 'register') {
     return (
-      <AuthPage
-        initialMode={route.view}
-        onBackToHome={handleBackToHome}
-        onAuthSuccess={handleAuthSuccess}
-      />
+      <Suspense fallback={<RouteFallback />}>
+        <AuthPage
+          initialMode={route.view}
+          onBackToHome={handleBackToHome}
+          onAuthSuccess={handleAuthSuccess}
+        />
+      </Suspense>
     );
   }
 
@@ -221,7 +255,10 @@ export default function App() {
         onNavigateToDashboard={handleNavigateToDashboard}
       />
       <main>
-        <Hero onNavigateToRegister={() => handleNavigateToAuth('register')} />
+        <Hero
+          onNavigateToLogin={() => handleNavigateToAuth('login')}
+          onNavigateToRegister={() => handleNavigateToAuth('register')}
+        />
         <ProblemSolution />
         <Features />
         <Pricing onNavigateToRegister={() => handleNavigateToAuth('register')} />

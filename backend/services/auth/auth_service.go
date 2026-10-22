@@ -49,11 +49,24 @@ func (s *AuthService) Register(dto RegisterDTO) (*AuthResult, error) {
 		return nil, errors.New("kata sandi minimal 8 karakter")
 	}
 
+	// Check PlatformSetting for reserved subdomains
+	var setting models.PlatformSetting
+	hasSetting := s.db.First(&setting).Error == nil
+
 	if username == "" {
 		parts := strings.Split(email, "@")
 		username = strings.ToLower(parts[0])
 	}
 	username = strings.ReplaceAll(username, " ", "-")
+
+	if hasSetting && setting.ReservedSubdomains != "" {
+		for _, rSlug := range strings.Split(setting.ReservedSubdomains, ",") {
+			if strings.EqualFold(strings.TrimSpace(rSlug), username) {
+				username = fmt.Sprintf("%s-%d", username, time.Now().Unix()%1000)
+				break
+			}
+		}
+	}
 
 	// Check for duplicate email
 	var existing models.User
@@ -61,10 +74,19 @@ func (s *AuthService) Register(dto RegisterDTO) (*AuthResult, error) {
 		return nil, errors.New("email sudah terdaftar. Silakan login.")
 	}
 
-	// Check if username taken; if so, append random suffix
-	var existingUsername models.User
-	if err := s.db.Where("username = ?", username).First(&existingUsername).Error; err == nil {
-		username = fmt.Sprintf("%s-%d", username, time.Now().Unix()%1000)
+	// Check if username or bio slug is already taken; if so, ensure unique slug by adding counter
+	baseUsername := username
+	counter := 1
+	for {
+		var userCount int64
+		var pageCount int64
+		s.db.Model(&models.User{}).Where("username = ?", username).Count(&userCount)
+		s.db.Model(&models.BioPage{}).Where("slug = ?", username).Count(&pageCount)
+		if userCount == 0 && pageCount == 0 {
+			break
+		}
+		username = fmt.Sprintf("%s-%d", baseUsername, counter)
+		counter++
 	}
 
 	newUser := models.User{
@@ -137,6 +159,20 @@ func (s *AuthService) Login(email, password string) (*AuthResult, error) {
 	if !user.CheckPassword(password) {
 		return nil, errors.New("email atau kata sandi tidak cocok")
 	}
+
+	if user.Status == "banned" {
+		return nil, errors.New("akun Anda telah diblokir permanen karena pelanggaran berat Ketentuan Layanan")
+	}
+	if user.Status == "suspended" {
+		reason := strings.TrimSpace(user.StatusReason)
+		if reason != "" {
+			return nil, fmt.Errorf("akun Anda sedang ditangguhkan sementara: %s", reason)
+		}
+		return nil, errors.New("akun Anda sedang ditangguhkan sementara oleh Tim Keamanan Klikin")
+	}
+
+	now := time.Now()
+	_ = s.db.Model(&models.User{}).Where("id = ?", user.ID).Update("updated_at", now)
 
 	token, err := config.GenerateToken(&user)
 	if err != nil {

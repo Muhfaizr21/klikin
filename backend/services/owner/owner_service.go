@@ -3,6 +3,7 @@ package owner
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -127,7 +128,7 @@ func (s *OwnerService) UpdateBioPage(userID string, dto UpdateBioPageDTO) (*mode
 	if dto.ButtonShadow != "" {
 		page.ButtonShadow = dto.ButtonShadow
 	}
-	page.CustomCSS = dto.CustomCSS
+	page.CustomCSS = sanitizeCustomCSS(dto.CustomCSS)
 	if dto.BlockSpacing != "" {
 		page.BlockSpacing = dto.BlockSpacing
 	}
@@ -156,6 +157,82 @@ func (s *OwnerService) UpdateBioPage(userID string, dto UpdateBioPageDTO) (*mode
 	return &page, nil
 }
 
+// sanitizeCustomCSS strips dangerous HTML/script breakout sequences from user-provided CSS
+func sanitizeCustomCSS(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	cleaned := raw
+	dangerousTokens := []string{"</style", "<style", "<script", "</script", "javascript:", "expression(", "vbscript:"}
+	for _, token := range dangerousTokens {
+		lower := strings.ToLower(cleaned)
+		for strings.Contains(lower, token) {
+			idx := strings.Index(lower, token)
+			cleaned = cleaned[:idx] + cleaned[idx+len(token):]
+			lower = strings.ToLower(cleaned)
+		}
+	}
+	return strings.TrimSpace(cleaned)
+}
+
+// validateBlockModeration checks URL, Title, and Content against active BlacklistedDomain & Keyword rules (Module 3.5 sync)
+func (s *OwnerService) validateBlockModeration(userID string, page *models.BioPage, blockID, title, content, rawURL string) error {
+	if s.db == nil {
+		return nil
+	}
+
+	var rules []models.BlacklistedDomain
+	if err := s.db.Where("is_active = ?", true).Find(&rules).Error; err != nil {
+		return nil
+	}
+
+	lowerURL := strings.ToLower(strings.TrimSpace(rawURL))
+	combinedText := strings.ToLower(title + " " + content + " " + rawURL)
+
+	for _, b := range rules {
+		pattern := strings.ToLower(strings.TrimSpace(b.Pattern))
+		if pattern == "" {
+			continue
+		}
+
+		matched := false
+		if b.MatchType == "keyword" {
+			matched = strings.Contains(combinedText, pattern)
+		} else {
+			matched = lowerURL != "" && strings.Contains(lowerURL, pattern)
+		}
+
+		if matched {
+			_ = s.db.Model(&models.BlacklistedDomain{}).Where("id = ?", b.ID).
+				UpdateColumn("hit_count", gorm.Expr("hit_count + 1")).Error
+
+			if page != nil {
+				now := time.Now()
+				report := models.ContentReport{
+					ID:            fmt.Sprintf("rep_auto_%d", now.UnixNano()),
+					PageID:        page.ID,
+					Slug:          page.Slug,
+					OwnerUserID:   userID,
+					ReporterName:  "Sistem Filter Otomatis Klikin",
+					ReporterEmail: "security@klikin.id",
+					ReporterIP:    "127.0.0.1",
+					Category:      b.Category,
+					Severity:      b.Severity,
+					Description:   fmt.Sprintf("Blok '%s' memicu aturan daftar hitam '%s' (%s)", title, b.Pattern, b.Reason),
+					TargetURL:     rawURL,
+					Status:        models.ReportStatusPending,
+					CreatedAt:     now,
+					UpdatedAt:     now,
+				}
+				_ = s.db.Create(&report)
+			}
+
+			return fmt.Errorf("konten/tautan ditolak oleh sistem keamanan Klikin: '%s' terdeteksi melanggar kebijakan (%s)", b.Pattern, strings.ToUpper(b.Category))
+		}
+	}
+	return nil
+}
+
 // CreateBlock adds a new block to the bio page
 func (s *OwnerService) CreateBlock(userID string, dto CreateBlockDTO) (*models.BioBlock, error) {
 	if s.db == nil {
@@ -170,8 +247,24 @@ func (s *OwnerService) CreateBlock(userID string, dto CreateBlockDTO) (*models.B
 	var count int64
 	s.db.Model(&models.BioBlock{}).Where("page_id = ?", page.ID).Count(&count)
 
+	// Enforce FreeMaxLinks from PlatformSetting for Free Tier users
+	var user models.User
+	if err := s.db.Select("is_pro").Where("id = ?", userID).First(&user).Error; err == nil && !user.IsPro {
+		var setting models.PlatformSetting
+		if errSet := s.db.Select("free_max_links").First(&setting).Error; errSet == nil && setting.FreeMaxLinks > 0 {
+			if int(count) >= setting.FreeMaxLinks {
+				return nil, fmt.Errorf("akun Gratis dibatasi maksimal %d blok/tautan per halaman. Silakan upgrade ke Klikin Pro untuk tautan tanpa batas", setting.FreeMaxLinks)
+			}
+		}
+	}
+
+	blockID := fmt.Sprintf("blk_%d", time.Now().UnixNano())
+	if err := s.validateBlockModeration(userID, &page, blockID, dto.Title, dto.Content, dto.URL); err != nil {
+		return nil, err
+	}
+
 	block := models.BioBlock{
-		ID:        fmt.Sprintf("blk_%d", time.Now().UnixNano()),
+		ID:        blockID,
 		PageID:    page.ID,
 		Type:      dto.Type,
 		Title:     dto.Title,
@@ -222,6 +315,11 @@ func (s *OwnerService) UpdateBlock(userID, blockID string, dto UpdateBlockDTO) (
 	}
 	if dto.URL != nil {
 		block.URL = *dto.URL
+	}
+	var page models.BioPage
+	_ = s.db.Where("id = ?", block.PageID).First(&page).Error
+	if err := s.validateBlockModeration(userID, &page, block.ID, block.Title, block.Content, block.URL); err != nil {
+		return nil, err
 	}
 	if dto.Subtitle != nil {
 		block.Subtitle = *dto.Subtitle
@@ -353,6 +451,10 @@ func (s *OwnerService) CreateLink(userID string, dto CreateLinkDTO) (*models.Lin
 
 	var count int64
 	s.db.Model(&models.Link{}).Where("page_id = ?", page.ID).Count(&count)
+
+	if err := s.validateBlockModeration(userID, &page, "", dto.Title, "", dto.URL); err != nil {
+		return nil, err
+	}
 
 	newLink := models.Link{
 		ID:         fmt.Sprintf("link_%d", time.Now().UnixNano()),

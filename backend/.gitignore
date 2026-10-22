@@ -16,3 +16,7 @@ bin/
 # IDEs
 .idea/
 .vscode/
+
+# Logs & Binaries
+*.log
+klikin-backend

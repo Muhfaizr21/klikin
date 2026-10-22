@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
+	"strings"
 
 	"klikin-backend/middlewares"
 	"klikin-backend/models"
@@ -12,11 +14,12 @@ import (
 )
 
 type BillingController struct {
-	service *billing.BillingService
+	service  *billing.BillingService
+	midtrans *billing.MidtransService
 }
 
-func NewBillingController(service *billing.BillingService) *BillingController {
-	return &BillingController{service: service}
+func NewBillingController(service *billing.BillingService, midtrans *billing.MidtransService) *BillingController {
+	return &BillingController{service: service, midtrans: midtrans}
 }
 
 func (c *BillingController) getUserID(r *http.Request) (string, error) {
@@ -79,16 +82,59 @@ func (c *BillingController) UpgradePlan(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	clientOrigin := r.Header.Get("Origin")
+	if clientOrigin == "" {
+		clientOrigin = strings.Split(os.Getenv("CLIENT_ORIGIN"), ",")[0]
+		if clientOrigin == "" {
+			clientOrigin = "http://localhost:5173"
+		}
+	}
+
 	targetPlan := models.PlanType(body.Plan)
-	sub, invoice, err := c.service.UpgradePlan(userID, targetPlan, body.BillingCycle, body.PromoCode)
+	resp, err := c.service.UpgradePlan(userID, targetPlan, body.BillingCycle, body.PromoCode, clientOrigin)
 	if err != nil {
 		views.RenderError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	views.RenderSuccess(w, http.StatusOK, "Langganan berhasil diupgrade ke "+string(sub.Plan), map[string]interface{}{
-		"subscription": sub,
-		"invoice":      invoice,
+	views.RenderSuccess(w, http.StatusOK, "Invoice pembayaran Midtrans berhasil dibuat", resp)
+}
+
+// VerifyMidtrans handles POST /api/owner/billing/verify-midtrans
+func (c *BillingController) VerifyMidtrans(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		OrderID string `json:"order_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.OrderID == "" {
+		views.RenderError(w, http.StatusBadRequest, "order_id wajib disertakan")
+		return
+	}
+
+	invoice, err := c.service.VerifyMidtransPayment(body.OrderID)
+	if err != nil {
+		views.RenderError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	views.RenderSuccess(w, http.StatusOK, "Status pembayaran berhasil diverifikasi", invoice)
+}
+
+// HandleMidtransWebhook handles POST /api/webhooks/midtrans
+func (c *BillingController) HandleMidtransWebhook(w http.ResponseWriter, r *http.Request) {
+	var payload billing.MidtransNotificationPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		views.RenderError(w, http.StatusBadRequest, "Payload webhook tidak valid")
+		return
+	}
+
+	if err := c.midtrans.HandleNotification(payload); err != nil {
+		views.RenderError(w, http.StatusInternalServerError, "Gagal memproses notifikasi Midtrans: "+err.Error())
+		return
+	}
+
+	views.RenderSuccess(w, http.StatusOK, "Notifikasi Midtrans berhasil diproses", map[string]string{
+		"order_id": payload.OrderID,
+		"status":   payload.TransactionStatus,
 	})
 }
 
@@ -215,4 +261,27 @@ func (c *BillingController) GetInvoiceReceipt(w http.ResponseWriter, r *http.Req
 		return
 	}
 	views.RenderSuccess(w, http.StatusOK, "Detail invoice berhasil dimuat", receipt)
+}
+
+// CancelInvoice handles POST /api/owner/billing/invoices/cancel
+func (c *BillingController) CancelInvoice(w http.ResponseWriter, r *http.Request) {
+	userID, err := c.getUserID(r)
+	if err != nil {
+		views.RenderError(w, http.StatusUnauthorized, "Sesi tidak valid atau telah kedaluwarsa")
+		return
+	}
+	var body struct {
+		InvoiceID string `json:"invoice_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.InvoiceID == "" {
+		views.RenderError(w, http.StatusBadRequest, "invoice_id wajib disertakan")
+		return
+	}
+
+	if err := c.service.CancelInvoice(userID, body.InvoiceID); err != nil {
+		views.RenderError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	views.RenderSuccess(w, http.StatusOK, "Invoice berhasil dibatalkan", nil)
 }

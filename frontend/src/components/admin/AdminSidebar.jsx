@@ -13,7 +13,6 @@ import {
   SettingsIcon,
   LogOutIcon,
   SparklesIcon,
-  ChevronDownIcon,
 } from '../Icons';
 
 export default function AdminSidebar({
@@ -40,6 +39,7 @@ export default function AdminSidebar({
   // Helper untuk mencocokkan tab aktif termasuk alias
   const isTabActive = (itemId) => {
     if (activeTab === itemId) return true;
+    if (itemId === 'overview' && (activeTab === 'overview' || activeTab === 'dashboard' || !activeTab)) return true;
     if (itemId === 'reports' && activeTab === 'analytics') return true;
     if (itemId === 'users' && activeTab === 'directory') return true;
     if (itemId === 'subscriptions' && activeTab === 'billing') return true;
@@ -50,27 +50,10 @@ export default function AdminSidebar({
     <aside className="w-full lg:w-72 bg-white flex flex-col justify-between select-none shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200/80 p-5 sm:p-6 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto scrollbar-none">
       <div className="space-y-5">
         {/* Brand Logo */}
-        <div className="flex items-center justify-between px-1">
+        <div className="flex items-center px-1">
           <div className="flex items-center gap-2">
             <Logo size={28} textClassName="text-[18px] font-bold tracking-tight text-slate-900" />
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200/80 font-mono">
-            SUPER ADMIN
-          </span>
-        </div>
-
-        {/* Workspace Selector Pill */}
-        <div className="bg-slate-50/80 hover:bg-slate-100/70 border border-slate-200/70 rounded-2xl p-2.5 transition-all flex items-center justify-between cursor-pointer group shadow-2xs">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-violet-600 text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0">
-              K
-            </div>
-            <div className="truncate">
-              <h4 className="text-xs font-bold text-slate-900 truncate leading-snug">Klikin Platform</h4>
-              <p className="text-[10px] text-slate-400 truncate font-medium">Internal Admin Console</p>
-            </div>
-          </div>
-          <ChevronDownIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-700 transition-colors shrink-0" />
         </div>
 
         {/* Daftar Menu Tunggal (Tanpa Header Kategori) Urut Prioritas */}

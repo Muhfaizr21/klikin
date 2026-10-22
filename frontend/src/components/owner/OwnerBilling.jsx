@@ -37,18 +37,11 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
   const [appliedPromo, setAppliedPromo] = useState(null);
   const [promoError, setPromoError] = useState(null);
   const [validatingPromo, setValidatingPromo] = useState(false);
-  const [paymentMethodSelected, setPaymentMethodSelected] = useState('card');
 
   // Cancel Modal State
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('pricing');
   const [cancelNotes, setCancelNotes] = useState('');
-
-  // Update Payment Method Modal State
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [cardBrand, setCardBrand] = useState('mastercard');
-  const [cardLast4, setCardLast4] = useState('4242');
-  const [cardExp, setCardExp] = useState('12/28');
 
   // Invoice Receipt Modal State
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -151,6 +144,55 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
     }
   };
 
+  const ensureMidtransSnapLoaded = (clientKey, isProduction) => {
+    return new Promise((resolve) => {
+      if (window.snap) {
+        resolve(true);
+        return;
+      }
+      const targetSrc = isProduction
+        ? 'https://app.midtrans.com/snap/snap.js'
+        : 'https://app.sandbox.midtrans.com/snap/snap.js';
+      const existing = document.querySelector('script[src*="midtrans.com/snap/snap.js"]');
+      if (existing) {
+        if (clientKey) {
+          existing.setAttribute('data-client-key', clientKey);
+        }
+        let attempts = 0;
+        const interval = setInterval(() => {
+          if (window.snap) {
+            clearInterval(interval);
+            resolve(true);
+          } else if (++attempts > 30) {
+            clearInterval(interval);
+            resolve(false);
+          }
+        }, 100);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = targetSrc;
+      if (clientKey) {
+        script.setAttribute('data-client-key', clientKey);
+      }
+      script.async = true;
+      script.onload = () => {
+        let attempts = 0;
+        const interval = setInterval(() => {
+          if (window.snap) {
+            clearInterval(interval);
+            resolve(true);
+          } else if (++attempts > 30) {
+            clearInterval(interval);
+            resolve(false);
+          }
+        }, 100);
+      };
+      script.onerror = () => resolve(false);
+      document.head.appendChild(script);
+    });
+  };
+
   const handleProcessUpgrade = async () => {
     setActionLoading(true);
     try {
@@ -168,17 +210,183 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
       });
       const result = await res.json();
       if (result.success) {
+        const snapToken = result.data?.snap_token;
+        const orderId = result.data?.order_id || result.data?.invoice?.invoice_number;
+        const clientKey = result.data?.client_key;
+        const isProd = Boolean(result.data?.is_production);
         setUpgradeModalOpen(false);
         setAppliedPromo(null);
         setPromoInput('');
-        setFeedback({
-          type: 'success',
-          message: 'Selamat! Anda telah resmi beralih ke paket Klikin Pro!',
-        });
-        fetchBillingOverview();
-        if (onRefreshUser) onRefreshUser();
+
+        if (snapToken && !snapToken.startsWith('mock_snap_')) {
+          await ensureMidtransSnapLoaded(clientKey, isProd);
+        }
+
+        if (snapToken && !snapToken.startsWith('mock_snap_') && window.snap) {
+          window.snap.pay(snapToken, {
+            onSuccess: async function (paymentResult) {
+              try {
+                await fetch(`${API_BASE}/owner/billing/verify-midtrans`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${authToken}`,
+                  },
+                  body: JSON.stringify({ order_id: orderId || paymentResult.order_id }),
+                });
+              } catch (e) {
+                console.error('Verify midtrans error:', e);
+              }
+              setFeedback({
+                type: 'success',
+                message: 'Selamat! Pembayaran Midtrans berhasil diverifikasi dan paket Klikin Pro Anda telah aktif.',
+              });
+              fetchBillingOverview();
+              if (onRefreshUser) onRefreshUser();
+            },
+            onPending: function () {
+              setFeedback({
+                type: 'info',
+                message: 'Invoice dibuat. Silakan selesaikan pembayaran sesuai instruksi Midtrans untuk mengaktifkan Pro.',
+              });
+              fetchBillingOverview();
+            },
+            onError: function () {
+              setFeedback({
+                type: 'error',
+                message: 'Pembayaran melalui Midtrans dibatalkan atau gagal diproses.',
+              });
+              fetchBillingOverview();
+            },
+            onClose: function () {
+              setFeedback({
+                type: 'info',
+                message: 'Jendela pembayaran Midtrans ditutup. Anda dapat melanjutkan pembayaran kapan saja melalui Riwayat Invoice.',
+              });
+              fetchBillingOverview();
+            },
+          });
+        } else if (snapToken && snapToken.startsWith('mock_snap_')) {
+          await fetch(`${API_BASE}/owner/billing/verify-midtrans`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${authToken}`,
+            },
+            body: JSON.stringify({ order_id: orderId }),
+          });
+          setFeedback({
+            type: 'success',
+            message: 'Pembayaran simulasi berhasil diverifikasi! Paket Klikin Pro Anda telah aktif.',
+          });
+          fetchBillingOverview();
+          if (onRefreshUser) onRefreshUser();
+        } else if (result.data?.snap_redirect_url) {
+          window.open(result.data.snap_redirect_url, '_blank');
+          setFeedback({
+            type: 'info',
+            message: 'Membuka portal pembayaran Midtrans. Silakan selesaikan pembayaran invoice.',
+          });
+          fetchBillingOverview();
+        } else {
+          setFeedback({
+            type: 'info',
+            message: 'Invoice langganan berhasil dibuat (status Menunggu Pembayaran). Selesaikan pembayaran untuk mengaktifkan Pro.',
+          });
+          fetchBillingOverview();
+        }
       } else {
         setFeedback({ type: 'error', message: result.error || 'Gagal memproses upgrade langganan' });
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePayInvoice = (inv) => {
+    if (!inv.snap_token) {
+      setFeedback({
+        type: 'error',
+        message: 'Token pembayaran invoice tidak ditemukan. Silakan hubungi tim bantuan.',
+      });
+      return;
+    }
+
+    if (window.snap) {
+      window.snap.pay(inv.snap_token, {
+        onSuccess: async function (paymentResult) {
+          try {
+            await fetch(`${API_BASE}/owner/billing/verify-midtrans`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${authToken}`,
+              },
+              body: JSON.stringify({ order_id: inv.invoice_number }),
+            });
+          } catch (e) {
+            console.error('Verify invoice error:', e);
+          }
+          setFeedback({
+            type: 'success',
+            message: 'Pembayaran invoice berhasil diverifikasi! Layanan Pro Anda telah aktif.',
+          });
+          fetchBillingOverview();
+          if (onRefreshUser) onRefreshUser();
+        },
+        onPending: function () {
+          setFeedback({
+            type: 'success',
+            message: 'Menunggu konfirmasi pembayaran dari Midtrans.',
+          });
+          fetchBillingOverview();
+        },
+        onError: function () {
+          setFeedback({
+            type: 'error',
+            message: 'Pembayaran gagal diproses oleh gateway Midtrans.',
+          });
+        },
+        onClose: function () {
+          // Closed by user
+        },
+      });
+    } else if (inv.snap_redirect_url) {
+      window.open(inv.snap_redirect_url, '_blank');
+    } else {
+      setFeedback({
+        type: 'error',
+        message: 'Gateway pembayaran Midtrans sedang memuat. Coba beberapa saat lagi.',
+      });
+    }
+  };
+
+  const handleCancelInvoice = async (inv) => {
+    if (!confirm(`Batalkan invoice pembayaran ${inv.invoice_number}?`)) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/owner/billing/invoices/cancel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ invoice_id: inv.invoice_number }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setFeedback({
+          type: 'success',
+          message: `Invoice ${inv.invoice_number} berhasil dibatalkan.`,
+        });
+        fetchBillingOverview();
+      } else {
+        setFeedback({
+          type: 'error',
+          message: result.error || 'Gagal membatalkan invoice',
+        });
       }
     } catch (err) {
       setFeedback({ type: 'error', message: err.message });
@@ -271,36 +479,7 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
     }
   };
 
-  const handleSavePaymentMethod = async (e) => {
-    e.preventDefault();
-    setActionLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/owner/billing/payment-method`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({
-          brand: cardBrand,
-          last4: cardLast4,
-          exp: cardExp,
-        }),
-      });
-      const result = await res.json();
-      if (result.success) {
-        setPaymentModalOpen(false);
-        setFeedback({ type: 'success', message: 'Metode pembayaran utama berhasil diperbarui!' });
-        fetchBillingOverview();
-      } else {
-        setFeedback({ type: 'error', message: result.error || 'Gagal memperbarui metode pembayaran' });
-      }
-    } catch (err) {
-      setFeedback({ type: 'error', message: err.message });
-    } finally {
-      setActionLoading(false);
-    }
-  };
+
 
   const handleOpenUpgrade = (planType) => {
     setSelectedPlanForUpgrade(planType);
@@ -322,7 +501,10 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
   // Calculations for Upgrade Modal
   const getUpgradeCalculations = () => {
     const isYearly = billingCycle === 'yearly';
-    const basePrice = isYearly ? 490000 : 49000;
+    const proTier = billingData?.pricing_tiers?.find((t) => t.plan_type === 'pro');
+    const monthlyPrice = proTier?.monthly_price || 29000;
+    const yearlyPrice = proTier?.yearly_price || 290000;
+    const basePrice = isYearly ? yearlyPrice : monthlyPrice;
 
     const discountPercent = appliedPromo ? appliedPromo.discount_percent : 0;
     const discountAmount = Math.round((basePrice * discountPercent) / 100);
@@ -378,6 +560,8 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
           className={`p-4 rounded-xl text-xs sm:text-sm flex items-center justify-between border shadow-sm transition-all ${
             feedback.type === 'success'
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : feedback.type === 'info'
+              ? 'bg-amber-50 border-amber-200 text-amber-900'
               : 'bg-rose-50 border-rose-200 text-rose-800'
           }`}
         >
@@ -385,7 +569,7 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
             {feedback.type === 'success' ? (
               <CheckIcon className="w-4 h-4 text-emerald-600 shrink-0" />
             ) : (
-              <AlertCircleIcon className="w-4 h-4 text-rose-600 shrink-0" />
+              <AlertCircleIcon className={`w-4 h-4 shrink-0 ${feedback.type === 'info' ? 'text-amber-600' : 'text-rose-600'}`} />
             )}
             <span className="font-medium">{feedback.message}</span>
           </div>
@@ -653,135 +837,80 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
         </div>
       </div>
 
-      {/* Payment Method & Billing Notifications Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Payment Method Card (5 cols) */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <CreditCardIcon className="w-4 h-4 text-slate-700" />
-                <h3 className="text-sm font-bold text-slate-900">Metode Pembayaran Utama</h3>
-              </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 uppercase">
-                {sub.payment_method_brand || 'Mastercard'}
-              </span>
-            </div>
+      {/* Billing Notifications Preferences (Full Width Card) */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-2">
+            <ClockIcon className="w-4 h-4 text-slate-700" />
+            <h3 className="text-sm font-bold text-slate-900">Notifikasi & Pengingat Tagihan</h3>
+          </div>
+          <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100 self-start sm:self-auto">
+            Otomatis via Email
+          </span>
+        </div>
+        <p className="text-xs text-slate-500 mb-5">
+          Atur preferensi komunikasi notifikasi agar Anda tidak pernah terlewat tanggal pembayaran atau status akun langganan Klikin.
+        </p>
 
-            <div className="p-4 rounded-xl bg-slate-900 text-white relative overflow-hidden mb-4 shadow-sm">
-              <div className="flex justify-between items-start mb-6">
-                <span className="text-xs font-bold tracking-wider text-slate-300 uppercase">
-                  {sub.payment_method_brand || 'Mastercard'}
-                </span>
-                <ShieldCheckIcon className="w-4 h-4 text-emerald-400" />
-              </div>
-              <p className="text-lg font-mono tracking-widest mb-4">
-                •••• •••• •••• {sub.payment_method_last4 || '4242'}
-              </p>
-              <div className="flex justify-between items-center text-[11px] text-slate-400">
-                <span>BERLAKU HINGGA: {sub.payment_method_exp || '12/28'}</span>
-                <span className="text-emerald-400 font-bold">TERVERIFIKASI</span>
-              </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+          <label className="flex flex-col justify-between p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition-all">
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <p className="text-xs font-bold text-slate-800">Reminder Perpanjangan (H-3)</p>
+              <input
+                type="checkbox"
+                checked={notifPreferences.renewalReminder}
+                onChange={(e) =>
+                  setNotifPreferences({ ...notifPreferences, renewalReminder: e.target.checked })
+                }
+                className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer mt-0.5 shrink-0"
+              />
             </div>
-            <p className="text-xs text-slate-500">
-              Kartu ini ditagihkan otomatis pada setiap siklus pembaruan akun. Enkripsi level perbankan PCI-DSS via Stripe.
+            <p className="text-[11px] text-slate-500">
+              Kirim email pengingat 3 hari sebelum siklus langganan berikutnya dimulai.
             </p>
-          </div>
+          </label>
 
-          <div className="flex items-center gap-3 pt-4 border-t border-slate-100 mt-4">
-            <button
-              type="button"
-              onClick={() => setPaymentModalOpen(true)}
-              className="flex-1 py-2 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-all text-center"
-            >
-              Ubah Kartu
-            </button>
-            <a
-              href={billingData?.stripe_portal_url || 'https://billing.stripe.com'}
-              target="_blank"
-              rel="noreferrer"
-              className="flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-all text-center flex items-center justify-center gap-1.5"
-            >
-              <span>Stripe Portal</span>
-              <ExternalLinkIcon className="w-3 h-3 text-slate-500" />
-            </a>
-          </div>
+          <label className="flex flex-col justify-between p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition-all">
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <p className="text-xs font-bold text-slate-800">Kwitansi & Faktur Pajak Otomatis</p>
+              <input
+                type="checkbox"
+                checked={notifPreferences.invoiceEmail}
+                onChange={(e) =>
+                  setNotifPreferences({ ...notifPreferences, invoiceEmail: e.target.checked })
+                }
+                className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer mt-0.5 shrink-0"
+              />
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Kirim salinan PDF invoice resmi langsung ke email saat transaksi dinyatakan lunas.
+            </p>
+          </label>
+
+          <label className="flex flex-col justify-between p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition-all">
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <p className="text-xs font-bold text-slate-800">Peringatan Tagihan & Jatuh Tempo</p>
+              <input
+                type="checkbox"
+                checked={notifPreferences.failedPaymentAlert}
+                onChange={(e) =>
+                  setNotifPreferences({ ...notifPreferences, failedPaymentAlert: e.target.checked })
+                }
+                className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer mt-0.5 shrink-0"
+              />
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Peringatan instan jika ada transaksi pending yang mendekati batas waktu pembayaran Midtrans.
+            </p>
+          </label>
         </div>
 
-        {/* Billing Notifications Preferences (7 cols) */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <ClockIcon className="w-4 h-4 text-slate-700" />
-                <h3 className="text-sm font-bold text-slate-900">Notifikasi & Pengingat Tagihan</h3>
-              </div>
-              <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                Otomatis via Email
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mb-5">
-              Atur preferensi komunikasi notifikasi agar Anda tidak pernah terlewat tanggal pembayaran atau status akun.
-            </p>
-
-            <div className="space-y-3.5">
-              <label className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition-all">
-                <div className="pr-3">
-                  <p className="text-xs font-semibold text-slate-800">Reminder Perpanjangan (H-3)</p>
-                  <p className="text-[11px] text-slate-500">
-                    Kirim email pengingat 3 hari sebelum kartu Anda didebit untuk perpanjangan berkala.
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={notifPreferences.renewalReminder}
-                  onChange={(e) =>
-                    setNotifPreferences({ ...notifPreferences, renewalReminder: e.target.checked })
-                  }
-                  className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer"
-                />
-              </label>
-
-              <label className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition-all">
-                <div className="pr-3">
-                  <p className="text-xs font-semibold text-slate-800">Kwitansi & Faktur Pajak Otomatis</p>
-                  <p className="text-[11px] text-slate-500">
-                    Kirim salinan PDF invoice resmi langsung ke email saat transaksi dinyatakan lunas.
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={notifPreferences.invoiceEmail}
-                  onChange={(e) =>
-                    setNotifPreferences({ ...notifPreferences, invoiceEmail: e.target.checked })
-                  }
-                  className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer"
-                />
-              </label>
-
-              <label className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition-all">
-                <div className="pr-3">
-                  <p className="text-xs font-semibold text-slate-800">Peringatan Gagal Bayar Segera</p>
-                  <p className="text-[11px] text-slate-500">
-                    Peringatan instan jika kartu Anda kedaluwarsa atau transaksi ditolak oleh bank penerbit.
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={notifPreferences.failedPaymentAlert}
-                  onChange={(e) =>
-                    setNotifPreferences({ ...notifPreferences, failedPaymentAlert: e.target.checked })
-                  }
-                  className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer"
-                />
-              </label>
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-slate-100 mt-4 flex items-center justify-between text-xs text-slate-500">
-            <span>Email terdaftar: <strong className="text-slate-700">{user?.email || 'owner@kopiseduh.id'}</strong></span>
-            <span className="text-emerald-600 font-semibold">Tersimpan</span>
-          </div>
+        <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500">
+          <span>Email tujuan notifikasi: <strong className="text-slate-800 font-semibold">{user?.email || 'owner@kopiseduh.id'}</strong></span>
+          <span className="text-emerald-600 font-semibold flex items-center gap-1.5">
+            <CheckIcon className="w-3.5 h-3.5" />
+            Preferensi Tersimpan
+          </span>
         </div>
       </div>
 
@@ -851,11 +980,45 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
                     <td className="py-3 px-4 text-slate-500">{formatIDR(inv.tax)}</td>
                     <td className="py-3 px-4 font-bold text-slate-900">{formatIDR(inv.total)}</td>
                     <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                        {inv.status === 'paid' ? 'LUNAS' : inv.status}
-                      </span>
+                      {inv.status === 'paid' ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          LUNAS
+                        </span>
+                      ) : inv.status === 'cancelled' ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                          DIBATALKAN
+                        </span>
+                      ) : inv.status === 'expired' ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                          KEDALUWARSA
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                          PENDING
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-right space-x-2">
+                      {inv.status === 'pending' && (inv.snap_token || inv.snap_redirect_url) && (
+                        <button
+                          type="button"
+                          onClick={() => handlePayInvoice(inv)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-black text-white font-semibold transition-all shadow-sm"
+                        >
+                          <CreditCardIcon className="w-3 h-3 text-[#bef264]" />
+                          <span>Bayar</span>
+                        </button>
+                      )}
+                      {inv.status === 'pending' && (
+                        <button
+                          type="button"
+                          onClick={() => handleCancelInvoice(inv)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-rose-200 hover:bg-rose-50 text-rose-600 font-semibold transition-all text-[11px]"
+                          title="Batalkan tagihan ini"
+                        >
+                          <span>Batalkan</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleOpenReceipt(inv)}
@@ -934,46 +1097,26 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
                     )}
                   </div>
 
-                  {/* Payment Method Selector */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">Pilih Metode Pembayaran</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethodSelected('card')}
-                        className={`p-2.5 rounded-xl border text-left text-xs font-semibold transition-all ${
-                          paymentMethodSelected === 'card'
-                            ? 'border-slate-900 bg-slate-50 text-slate-900 ring-1 ring-slate-900'
-                            : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                        }`}
-                      >
-                        <p className="font-bold">Kartu Kredit/Debit</p>
-                        <p className="text-[10px] text-slate-400">Visa / Mastercard</p>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethodSelected('qris')}
-                        className={`p-2.5 rounded-xl border text-left text-xs font-semibold transition-all ${
-                          paymentMethodSelected === 'qris'
-                            ? 'border-slate-900 bg-slate-50 text-slate-900 ring-1 ring-slate-900'
-                            : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                        }`}
-                      >
-                        <p className="font-bold">QRIS Instant</p>
-                        <p className="text-[10px] text-slate-400">GoPay, OVO, Dana</p>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethodSelected('va')}
-                        className={`p-2.5 rounded-xl border text-left text-xs font-semibold transition-all ${
-                          paymentMethodSelected === 'va'
-                            ? 'border-slate-900 bg-slate-50 text-slate-900 ring-1 ring-slate-900'
-                            : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                        }`}
-                      >
-                        <p className="font-bold">Virtual Account</p>
-                        <p className="text-[10px] text-slate-400">BCA, Mandiri, BRI</p>
-                      </button>
+                  {/* Midtrans Payment Gateway Badge */}
+                  <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <ShieldCheckIcon className="w-4 h-4 text-emerald-600" />
+                        Metode Pembayaran via Midtrans
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                        Otomatis & Aman
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Didukung oleh <strong>Midtrans Snap</strong> dengan opsi lengkap: QRIS (GoPay, OVO, ShopeePay), Virtual Account (BCA, Mandiri, BNI, BRI, Permata), dan Kartu Kredit/Debit.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {['QRIS', 'BCA VA', 'Mandiri VA', 'BNI VA', 'BRI VA', 'GoPay', 'ShopeePay', 'Visa/Mastercard'].map((pm) => (
+                        <span key={pm} className="text-[10px] font-semibold px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600">
+                          {pm}
+                        </span>
+                      ))}
                     </div>
                   </div>
 
@@ -1099,102 +1242,7 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
         </div>
       )}
 
-      {/* Update Card Modal */}
-      {paymentModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <form
-            onSubmit={handleSavePaymentMethod}
-            className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150"
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Perbarui Metode Pembayaran</h3>
-              <button
-                type="button"
-                onClick={() => setPaymentModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 font-bold"
-              >
-                ✕
-              </button>
-            </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
-                  <span>Penerbit Kartu</span>
-                  <span className="text-[10px] text-slate-400">Pilih jaringan kartu</span>
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[
-                    { id: 'mastercard', label: 'Mastercard' },
-                    { id: 'visa', label: 'Visa' },
-                    { id: 'jcb', label: 'JCB' },
-                    { id: 'amex', label: 'Amex' },
-                  ].map((b) => {
-                    const isSelected = cardBrand === b.id;
-                    return (
-                      <button
-                        key={b.id}
-                        type="button"
-                        onClick={() => setCardBrand(b.id)}
-                        className={`py-2 px-1 text-center rounded-xl text-xs font-bold transition-all border ${
-                          isSelected
-                            ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                        }`}
-                      >
-                        {b.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">4 Digit Terakhir Kartu</label>
-                <input
-                  type="text"
-                  maxLength="4"
-                  required
-                  placeholder="4242"
-                  value={cardLast4}
-                  onChange={(e) => setCardLast4(e.target.value.replace(/\D/g, ''))}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono focus:ring-1 focus:ring-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Masa Berlaku (MM/YY)</label>
-                <input
-                  type="text"
-                  maxLength="5"
-                  required
-                  placeholder="12/28"
-                  value={cardExp}
-                  onChange={(e) => setCardExp(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono focus:ring-1 focus:ring-slate-900"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setPaymentModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                disabled={actionLoading}
-                className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-black transition-all"
-              >
-                {actionLoading ? 'Menyimpan...' : 'Simpan Kartu'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {/* Official Indonesian Printable Invoice / Receipt Modal */}
       {invoiceModalOpen && selectedInvoice && (
@@ -1238,8 +1286,22 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
                   <p className="text-[11px] text-slate-500">Jakarta Selatan, DKI Jakarta 12950, Indonesia</p>
                 </div>
                 <div className="text-right">
-                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 uppercase tracking-wider">
-                    {selectedInvoice.status === 'paid' ? 'LUNAS (PAID)' : selectedInvoice.status}
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                    selectedInvoice.status === 'paid'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : selectedInvoice.status === 'cancelled'
+                      ? 'bg-slate-100 text-slate-600'
+                      : selectedInvoice.status === 'expired'
+                      ? 'bg-rose-50 text-rose-700'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {selectedInvoice.status === 'paid'
+                      ? 'LUNAS (PAID)'
+                      : selectedInvoice.status === 'cancelled'
+                      ? 'DIBATALKAN (CANCELLED)'
+                      : selectedInvoice.status === 'expired'
+                      ? 'KEDALUWARSA (EXPIRED)'
+                      : 'MENUNGGU (PENDING)'}
                   </span>
                   <p className="text-xs font-mono font-bold text-slate-900 mt-2">{selectedInvoice.invoice_number}</p>
                   <p className="text-[11px] text-slate-500">
@@ -1264,7 +1326,7 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
                 <div className="text-right">
                   <p className="font-semibold text-slate-400 uppercase text-[10px] tracking-wider mb-1">METODE PEMBAYARAN:</p>
                   <p className="font-bold text-slate-900 uppercase">{selectedInvoice.payment_method}</p>
-                  <p className="text-slate-500 text-[11px]">Gateway: Stripe Indonesia</p>
+                  <p className="text-slate-500 text-[11px]">Gateway: Midtrans Payment Gateway (Snap)</p>
                 </div>
               </div>
 

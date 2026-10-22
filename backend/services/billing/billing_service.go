@@ -3,6 +3,7 @@ package billing
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -11,11 +12,12 @@ import (
 )
 
 type BillingService struct {
-	db *gorm.DB
+	db       *gorm.DB
+	midtrans *MidtransService
 }
 
-func NewBillingService(db *gorm.DB) *BillingService {
-	return &BillingService{db: db}
+func NewBillingService(db *gorm.DB, midtrans *MidtransService) *BillingService {
+	return &BillingService{db: db, midtrans: midtrans}
 }
 
 type PlanPricing struct {
@@ -59,8 +61,8 @@ var DefaultPricingTiers = []PlanPricing{
 	{
 		PlanType:       models.PlanPro,
 		Name:           "Klikin Pro",
-		MonthlyPrice:   49000,
-		YearlyPrice:    490000,
+		MonthlyPrice:   29000,
+		YearlyPrice:    290000,
 		YearlyDiscount: "Hemat 17% (2 Bulan Gratis)",
 		Description:    "Untuk kreator, pebisnis, dan profesional yang ingin konversi maksimal.",
 		Features: []string{
@@ -77,6 +79,28 @@ var DefaultPricingTiers = []PlanPricing{
 	},
 }
 
+// GetDynamicPricingTiers returns pricing tiers dynamically synchronized with PlatformSetting
+func (s *BillingService) GetDynamicPricingTiers() []PlanPricing {
+	tiers := make([]PlanPricing, len(DefaultPricingTiers))
+	copy(tiers, DefaultPricingTiers)
+
+	var setting models.PlatformSetting
+	if s.db != nil && s.db.First(&setting).Error == nil {
+		for i := range tiers {
+			if tiers[i].PlanType == models.PlanPro {
+				if setting.ProMonthlyPrice > 0 {
+					tiers[i].MonthlyPrice = setting.ProMonthlyPrice
+				}
+				if setting.ProYearlyPrice > 0 {
+					tiers[i].YearlyPrice = setting.ProYearlyPrice
+				}
+			}
+		}
+	}
+
+	return tiers
+}
+
 // GetSubscriptionDetails retrieves user subscription status and invoices
 func (s *BillingService) GetSubscriptionDetails(userID string) (*BillingOverviewResponse, error) {
 	if s.db == nil {
@@ -86,6 +110,18 @@ func (s *BillingService) GetSubscriptionDetails(userID string) (*BillingOverview
 	var user models.User
 	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
 		return nil, errors.New("pengguna tidak ditemukan")
+	}
+
+	var setting models.PlatformSetting
+	var proMonthlyPrice int64 = 29000
+	var proYearlyPrice int64 = 290000
+	if err := s.db.First(&setting).Error; err == nil {
+		if setting.ProMonthlyPrice > 0 {
+			proMonthlyPrice = setting.ProMonthlyPrice
+		}
+		if setting.ProYearlyPrice > 0 {
+			proYearlyPrice = setting.ProYearlyPrice
+		}
 	}
 
 	var sub models.Subscription
@@ -100,7 +136,7 @@ func (s *BillingService) GetSubscriptionDetails(userID string) (*BillingOverview
 
 		if user.IsPro {
 			plan = models.PlanPro
-			price = 49000
+			price = proMonthlyPrice
 		}
 
 		sub = models.Subscription{
@@ -113,13 +149,23 @@ func (s *BillingService) GetSubscriptionDetails(userID string) (*BillingOverview
 			Currency:           "IDR",
 			CurrentPeriodStart: now,
 			CurrentPeriodEnd:   end,
-			PaymentMethodBrand: "mastercard",
-			PaymentMethodLast4: "4242",
-			PaymentMethodExp:   "12/28",
+			PaymentMethodBrand: "midtrans",
+			PaymentMethodLast4: "snap",
+			PaymentMethodExp:   "active",
 			CreatedAt:          now,
 			UpdatedAt:          now,
 		}
 		s.db.Create(&sub)
+	} else if sub.Plan == models.PlanPro {
+		// Sync existing pro subscription price with current platform settings
+		expectedPrice := proMonthlyPrice
+		if sub.BillingCycle == "yearly" {
+			expectedPrice = proYearlyPrice
+		}
+		if sub.Price != expectedPrice && expectedPrice > 0 {
+			sub.Price = expectedPrice
+			s.db.Model(&models.Subscription{}).Where("id = ?", sub.ID).Update("price", expectedPrice)
+		}
 	}
 
 	// Sync subscription lifecycle (auto-downgrade expired Pro, check grace period, notify)
@@ -134,6 +180,9 @@ func (s *BillingService) GetSubscriptionDetails(userID string) (*BillingOverview
 		daysRemaining = 0
 	}
 
+	// Auto-cancel expired or canceled pending invoices from Midtrans
+	s.SyncAndCancelPendingInvoices(userID)
+
 	// Fetch user invoices
 	var invoices []models.Invoice
 	s.db.Where("user_id = ?", userID).Order("created_at desc").Find(&invoices)
@@ -146,7 +195,7 @@ func (s *BillingService) GetSubscriptionDetails(userID string) (*BillingOverview
 		Subscription:    &sub,
 		Invoices:        invoices,
 		DaysRemaining:   daysRemaining,
-		PricingTiers:    DefaultPricingTiers,
+		PricingTiers:    s.GetDynamicPricingTiers(),
 		StripePortalURL: "https://billing.stripe.com/p/session/test_simulated_portal",
 		NextRenewalDate: sub.CurrentPeriodEnd.Format("02 January 2006"),
 		AvailablePromos: promos,
@@ -218,31 +267,53 @@ func (s *BillingService) ValidatePromoCode(code string) (*models.PromoCode, erro
 	return &promo, nil
 }
 
-// UpgradePlan upgrades subscription to Pro or Agency with invoice creation
-func (s *BillingService) UpgradePlan(userID string, targetPlan models.PlanType, billingCycle string, promoCode string) (*models.Subscription, *models.Invoice, error) {
+type UpgradeResponse struct {
+	Subscription    *models.Subscription `json:"subscription"`
+	Invoice         *models.Invoice      `json:"invoice"`
+	OrderID         string               `json:"order_id"`
+	SnapToken       string               `json:"snap_token"`
+	SnapRedirectURL string               `json:"snap_redirect_url"`
+	ClientKey       string               `json:"client_key"`
+	IsProduction    bool                 `json:"is_production"`
+}
+
+// UpgradePlan creates a pending invoice and requests a Midtrans Snap transaction token
+func (s *BillingService) UpgradePlan(userID string, targetPlan models.PlanType, billingCycle string, promoCode string, clientOrigin string) (*UpgradeResponse, error) {
 	if s.db == nil {
-		return nil, nil, errors.New("database not available")
+		return nil, errors.New("database not available")
 	}
 
 	var sub models.Subscription
 	if err := s.db.Where("user_id = ?", userID).First(&sub).Error; err != nil {
-		return nil, nil, errors.New("data langganan tidak ditemukan")
+		return nil, errors.New("data langganan tidak ditemukan")
+	}
+
+	var user models.User
+	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
+		return nil, errors.New("pengguna tidak ditemukan")
 	}
 
 	targetPlan = models.PlanPro
 	planName := "Klikin Pro"
-	var basePrice int64
+
+	// Fetch base price from platform settings if available
+	var basePrice int64 = 29000
 	if billingCycle == "yearly" {
-		basePrice = 490000
-	} else {
-		basePrice = 49000
+		basePrice = 290000
+	}
+	var setting models.PlatformSetting
+	if err := s.db.First(&setting).Error; err == nil {
+		if billingCycle == "yearly" && setting.ProYearlyPrice > 0 {
+			basePrice = setting.ProYearlyPrice
+		} else if setting.ProMonthlyPrice > 0 {
+			basePrice = setting.ProMonthlyPrice
+		}
 	}
 
 	discountPercent := 0
 	if promoCode != "" {
 		if promo, err := s.ValidatePromoCode(promoCode); err == nil {
 			discountPercent = promo.DiscountPercent
-			// Increment promo usage
 			s.db.Model(&promo).Update("used_count", promo.UsedCount+1)
 		}
 	}
@@ -254,53 +325,130 @@ func (s *BillingService) UpgradePlan(userID string, targetPlan models.PlanType, 
 	total := subtotal + tax
 
 	now := time.Now()
-	var periodEnd time.Time
-	if billingCycle == "yearly" {
-		periodEnd = now.AddDate(1, 0, 0)
-	} else {
-		periodEnd = now.AddDate(0, 1, 0)
+	invoiceNumber := fmt.Sprintf("INV-%s-%04d", now.Format("2006"), (now.UnixNano()%9000)+1000)
+
+	// Call Midtrans Snap API
+	userName := user.FullName
+	if userName == "" {
+		userName = user.Username
+	}
+	if userName == "" {
+		userName = "Pelanggan Klikin"
+	}
+	userEmail := user.Email
+	if userEmail == "" {
+		userEmail = "user@klikin.id"
 	}
 
-	// Update subscription
-	sub.Plan = targetPlan
-	sub.BillingCycle = billingCycle
-	sub.Status = models.SubscriptionStatusActive
-	sub.Price = basePrice
-	sub.DiscountPercent = discountPercent
-	sub.AppliedPromoCode = promoCode
-	sub.CurrentPeriodStart = now
-	sub.CurrentPeriodEnd = periodEnd
-	sub.CancelAtPeriodEnd = false
-	sub.CanceledAt = nil
-	sub.CancellationReason = ""
-	sub.UpdatedAt = now
-
-	if err := s.db.Save(&sub).Error; err != nil {
-		return nil, nil, err
+	snapToken, snapRedirectURL, snapErr := s.midtrans.CreateSnapTransaction(
+		invoiceNumber,
+		total,
+		userName,
+		userEmail,
+		fmt.Sprintf("%s (%s)", planName, billingCycle),
+		clientOrigin,
+	)
+	if snapErr != nil {
+		fmt.Printf("⚠️ Snap token creation error: %v\n", snapErr)
+		return nil, fmt.Errorf("gagal membuat sesi pembayaran Midtrans: %w", snapErr)
 	}
 
-	// Create new paid invoice
+	// Create new pending invoice
 	invoice := models.Invoice{
-		ID:             fmt.Sprintf("inv_%d", now.UnixNano()),
-		InvoiceNumber:  fmt.Sprintf("INV-%s-%04d", now.Format("2006"), (now.UnixNano()%9000)+1000),
-		UserID:         userID,
-		SubscriptionID: sub.ID,
-		PlanName:       planName,
-		BillingCycle:   billingCycle,
-		Amount:         subtotal,
-		Tax:            tax,
-		Total:          total,
-		Status:         "paid",
-		BillingReason:  "subscription_upgrade",
-		PaidAt:         &now,
-		CreatedAt:      now,
+		ID:              fmt.Sprintf("inv_%d", now.UnixNano()),
+		InvoiceNumber:   invoiceNumber,
+		UserID:          userID,
+		SubscriptionID:  sub.ID,
+		PlanName:        planName,
+		BillingCycle:    billingCycle,
+		Amount:          subtotal,
+		Tax:             tax,
+		Total:           total,
+		Status:          "pending",
+		PaymentChannel:  "midtrans",
+		BillingReason:   "subscription_upgrade",
+		SnapToken:       snapToken,
+		SnapRedirectURL: snapRedirectURL,
+		Notes:           "Menunggu pembayaran via Midtrans Snap",
+		CreatedAt:       now,
 	}
 	s.db.Create(&invoice)
 
-	// Ensure user has is_pro = true
-	s.db.Model(&models.User{}).Where("id = ?", userID).Update("is_pro", true)
+	return &UpgradeResponse{
+		Subscription:    &sub,
+		Invoice:         &invoice,
+		OrderID:         invoiceNumber,
+		SnapToken:       snapToken,
+		SnapRedirectURL: snapRedirectURL,
+		ClientKey:       s.midtrans.GetClientKey(),
+		IsProduction:    s.midtrans.IsProduction(),
+	}, nil
+}
 
-	return &sub, &invoice, nil
+// VerifyMidtransPayment checks with Midtrans API or marks paid if confirmed
+func (s *BillingService) VerifyMidtransPayment(orderID string) (*models.Invoice, error) {
+	if s.db == nil {
+		return nil, errors.New("database not available")
+	}
+
+	var invoice models.Invoice
+	if err := s.db.Where("invoice_number = ? OR id = ?", orderID, orderID).First(&invoice).Error; err != nil {
+		return nil, errors.New("invoice tidak ditemukan")
+	}
+
+	if invoice.Status == "paid" {
+		return &invoice, nil
+	}
+
+	// Query Midtrans API directly (or confirm mock snap token in local dev)
+	status, err := s.midtrans.CheckStatus(invoice.InvoiceNumber)
+	isDevMock := strings.HasPrefix(invoice.SnapToken, "mock_snap_")
+	now := time.Now()
+	if (err == nil && (status == "settlement" || status == "capture")) || status == "success" || isDevMock {
+		invoice.Status = "paid"
+		invoice.PaidAt = &now
+		invoice.Notes = "Pembayaran dikonfirmasi via Midtrans Core API Check"
+		s.db.Save(&invoice)
+
+		// Activate Pro Subscription & synchronize Price and BillingCycle
+		var sub models.Subscription
+		if err := s.db.Where("id = ? OR user_id = ?", invoice.SubscriptionID, invoice.UserID).First(&sub).Error; err == nil {
+			sub.Plan = models.PlanPro
+			sub.Status = models.SubscriptionStatusActive
+			if invoice.BillingCycle != "" {
+				sub.BillingCycle = invoice.BillingCycle
+			}
+			if invoice.Amount > 0 {
+				sub.Price = invoice.Amount
+			}
+			sub.CurrentPeriodStart = now
+			if invoice.BillingCycle == "yearly" {
+				sub.CurrentPeriodEnd = now.AddDate(1, 0, 0)
+			} else {
+				sub.CurrentPeriodEnd = now.AddDate(0, 1, 0)
+			}
+			sub.CancelAtPeriodEnd = false
+			sub.UpdatedAt = now
+			s.db.Save(&sub)
+		}
+
+		s.db.Model(&models.User{}).Where("id = ?", invoice.UserID).Update("is_pro", true)
+
+		finLog := models.FinancialAuditLog{
+			ID:        fmt.Sprintf("fin_%d", now.UnixNano()),
+			AdminID:   "midtrans_core_api",
+			AdminName: "Midtrans Payment Verification",
+			Action:    "PAYMENT_SETTLED",
+			Target:    invoice.InvoiceNumber,
+			Amount:    invoice.Total,
+			Details:   fmt.Sprintf("Invoice %s diverifikasi lunas via Midtrans Core API", invoice.InvoiceNumber),
+			IPAddress: "midtrans-api",
+			CreatedAt: now,
+		}
+		_ = s.db.Create(&finLog)
+	}
+
+	return &invoice, nil
 }
 
 // DowngradePlan schedules cancellation to free tier at the end of billing period
@@ -417,6 +565,7 @@ func (s *BillingService) GetInvoices(userID string) ([]models.Invoice, error) {
 	if s.db == nil {
 		return nil, errors.New("database not available")
 	}
+	s.SyncAndCancelPendingInvoices(userID)
 	var invoices []models.Invoice
 	err := s.db.Where("user_id = ?", userID).Order("created_at desc").Find(&invoices).Error
 	return invoices, err
@@ -542,3 +691,158 @@ func (s *BillingService) SyncSubscriptionLifecycle(userID string) (*models.Subsc
 
 	return &sub, nil
 }
+
+// SyncAndCancelPendingInvoices checks pending invoices and auto-cancels those that have expired or been cancelled in Midtrans
+func (s *BillingService) SyncAndCancelPendingInvoices(userID string) {
+	if s.db == nil {
+		return
+	}
+
+	var pendingInvoices []models.Invoice
+	query := s.db.Where("status = ?", "pending")
+	if userID != "" {
+		query = query.Where("user_id = ?", userID)
+	}
+	if err := query.Find(&pendingInvoices).Error; err != nil {
+		return
+	}
+
+	log.Printf("[BillingSweeper] Syncing %d pending invoice(s)...", len(pendingInvoices))
+
+	now := time.Now()
+	for _, inv := range pendingInvoices {
+		shouldCancel := false
+		cancelReason := ""
+		age := now.Sub(inv.CreatedAt)
+
+		log.Printf("[BillingSweeper] Checking invoice %s: CreatedAt=%s, Age=%s, HasToken=%v",
+			inv.InvoiceNumber, inv.CreatedAt.Format(time.RFC3339), age.Round(time.Second), inv.SnapToken != "")
+
+		// 1. Time-based auto cancellation: Invoices older than 24 hours
+		if age > 24*time.Hour {
+			shouldCancel = true
+			cancelReason = "Otomatis dibatalkan sistem: telah melewati batas pending 24 jam"
+		} else if inv.SnapToken == "" && age > 5*time.Minute {
+			// 2. Token issue: Incomplete invoice older than 5 minutes
+			shouldCancel = true
+			cancelReason = "Otomatis dibatalkan sistem: token pembayaran tidak valid"
+		} else if inv.InvoiceNumber != "" && s.midtrans != nil {
+			// 3. Query Midtrans API directly for live transaction status
+			mStatus, err := s.midtrans.CheckStatus(inv.InvoiceNumber)
+			log.Printf("[BillingSweeper] Midtrans status for %s: %s (err=%v)", inv.InvoiceNumber, mStatus, err)
+			if err == nil {
+				switch mStatus {
+				case "expire":
+					shouldCancel = true
+					cancelReason = "Otomatis dibatalkan: batas waktu transaksi telah kedaluwarsa di Midtrans"
+				case "cancel":
+					shouldCancel = true
+					cancelReason = "Otomatis dibatalkan: pesanan dibatalkan via Midtrans"
+				case "deny":
+					shouldCancel = true
+					cancelReason = "Otomatis dibatalkan: pembayaran ditolak oleh sistem perbankan/Midtrans"
+				case "settlement", "capture":
+					// Midtrans confirms it was paid, activate Pro!
+					inv.Status = "paid"
+					inv.PaidAt = &now
+					inv.Notes = "Pembayaran dikonfirmasi via sinkronisasi status Midtrans"
+					_ = s.db.Model(&models.Invoice{}).Where("id = ?", inv.ID).Updates(map[string]interface{}{
+						"status":  "paid",
+						"paid_at": now,
+						"notes":   inv.Notes,
+					})
+					s.activateProSubscription(inv.UserID, inv.SubscriptionID, inv.BillingCycle, inv.Amount)
+					continue
+				case "not_found", "unknown":
+					// If older than 10 minutes and does not exist in Midtrans (or unknown status)
+					if age > 10*time.Minute {
+						shouldCancel = true
+						cancelReason = "Otomatis dibatalkan: transaksi tidak diselesaikan di Midtrans"
+					}
+				}
+			}
+		}
+
+		if shouldCancel {
+			inv.Status = "cancelled"
+			inv.Notes = cancelReason
+			_ = s.db.Model(&models.Invoice{}).Where("id = ?", inv.ID).Updates(map[string]interface{}{
+				"status": "cancelled",
+				"notes":  cancelReason,
+			})
+			log.Printf("[BillingSweeper] Invoice %s status pending otomatis dibatalkan: %s", inv.InvoiceNumber, cancelReason)
+		}
+	}
+}
+
+// activateProSubscription helper enables Pro tier for user
+func (s *BillingService) activateProSubscription(userID string, subscriptionID string, billingCycle string, amount int64) {
+	now := time.Now()
+	var sub models.Subscription
+	if err := s.db.Where("id = ? OR user_id = ?", subscriptionID, userID).First(&sub).Error; err == nil {
+		sub.Plan = models.PlanPro
+		sub.Status = models.SubscriptionStatusActive
+		if billingCycle != "" {
+			sub.BillingCycle = billingCycle
+		}
+		if amount > 0 {
+			sub.Price = amount
+		}
+		sub.CurrentPeriodStart = now
+		if billingCycle == "yearly" {
+			sub.CurrentPeriodEnd = now.AddDate(1, 0, 0)
+		} else {
+			sub.CurrentPeriodEnd = now.AddDate(0, 1, 0)
+		}
+		sub.CancelAtPeriodEnd = false
+		sub.UpdatedAt = now
+		_ = s.db.Save(&sub)
+	}
+	_ = s.db.Model(&models.User{}).Where("id = ?", userID).Update("is_pro", true)
+}
+
+// CancelInvoice allows an owner to manually cancel their pending invoice
+func (s *BillingService) CancelInvoice(userID string, invoiceID string) error {
+	if s.db == nil {
+		return errors.New("database not available")
+	}
+
+	var invoice models.Invoice
+	if err := s.db.Where("(id = ? OR invoice_number = ?) AND user_id = ?", invoiceID, invoiceID, userID).First(&invoice).Error; err != nil {
+		return errors.New("invoice tidak ditemukan")
+	}
+
+	if invoice.Status != "pending" {
+		return errors.New("hanya invoice berstatus pending yang dapat dibatalkan")
+	}
+
+	invoice.Status = "cancelled"
+	invoice.Notes = "Dibatalkan secara manual oleh pengguna"
+	if err := s.db.Model(&models.Invoice{}).Where("id = ?", invoice.ID).Updates(map[string]interface{}{
+		"status": "cancelled",
+		"notes":  invoice.Notes,
+	}).Error; err != nil {
+		return err
+	}
+
+	// Inform Midtrans to cancel transaction if it exists
+	if s.midtrans != nil && invoice.InvoiceNumber != "" {
+		_ = s.midtrans.CancelTransaction(invoice.InvoiceNumber)
+	}
+
+	return nil
+}
+
+// StartInvoiceExpirationSweeper launches a background periodic cleaner for pending invoices
+func (s *BillingService) StartInvoiceExpirationSweeper() {
+	go func() {
+		// Run once immediately on server startup
+		s.SyncAndCancelPendingInvoices("")
+		ticker := time.NewTicker(3 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			s.SyncAndCancelPendingInvoices("")
+		}
+	}()
+}
+

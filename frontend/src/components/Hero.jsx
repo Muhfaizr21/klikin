@@ -1,26 +1,28 @@
 import React, { useState } from 'react';
 import BioPagePreview from './BioPagePreview';
 import { CheckIcon, AlertCircleIcon } from './Icons';
+import { navigateTo } from '../utils/navigation';
 
-export default function Hero() {
+export default function Hero({ onNavigateToLogin, onNavigateToRegister }) {
   const [username, setUsername] = useState('');
   const [claimStatus, setClaimStatus] = useState(null);
 
   const handleClaim = (e) => {
     e.preventDefault();
     const clean = username.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
-    if (!clean || clean.length < 3) {
-      setClaimStatus({
-        type: 'error',
-        message: 'Username minimal 3 karakter (huruf kecil, angka, tanda strip).',
-      });
-      return;
+    if (clean) {
+      try {
+        localStorage.setItem('klikin_claimed_slug', clean);
+      } catch (err) {
+        // ignore storage error
+      }
     }
-
-    setClaimStatus({
-      type: 'success',
-      message: `Tautan klikin.id/${clean} siap diamankan! Lanjutkan aktivasi profil Anda.`,
-    });
+    if (onNavigateToLogin) {
+      onNavigateToLogin();
+    } else {
+      navigateTo('/login');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (

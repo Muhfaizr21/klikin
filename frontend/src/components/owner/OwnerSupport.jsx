@@ -44,7 +44,7 @@ const TICKET_CATEGORIES = [
     id: 'billing',
     label: 'Pembayaran & Langganan',
     badge: 'Billing / Pro',
-    desc: 'Faktur, checkout Stripe, kendala kartu, atau kuota aktif',
+    desc: 'Faktur, checkout Midtrans, kendala pembayaran, atau kuota aktif',
     icon: CreditCardIcon,
     color: 'text-emerald-600 bg-emerald-50 border-emerald-200',
   },
@@ -1176,7 +1176,7 @@ export default function OwnerSupport({ user, token }) {
                         <MessageCircleIcon className="w-3.5 h-3.5 text-emerald-600" />
                         <span>WhatsApp Care</span>
                       </div>
-                      <p className="text-slate-500 text-[11px]">Senin – Minggu (08.00 – 22.00 WIB)</p>
+                      <p className="text-slate-500 text-[11px]">Senin - Minggu (08.00 - 22.00 WIB)</p>
                     </div>
 
                     <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60 space-y-1">

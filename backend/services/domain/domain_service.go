@@ -139,6 +139,17 @@ func (s *DomainService) AddDomain(userID string, dto AddDomainDTO) (*DomainDetai
 		return nil, errors.New("nama domain ini dicadangkan untuk infrastruktur Klikin dan tidak dapat digunakan")
 	}
 
+	var activeBlacklist []models.BlacklistedDomain
+	if err := s.db.Where("is_active = ?", true).Find(&activeBlacklist).Error; err == nil {
+		for _, bl := range activeBlacklist {
+			pattern := strings.ToLower(strings.TrimSpace(bl.Pattern))
+			if pattern != "" && (cleanDomain == pattern || strings.HasSuffix(cleanDomain, "."+pattern) || strings.Contains(cleanDomain, pattern)) {
+				s.db.Model(&models.BlacklistedDomain{}).Where("id = ?", bl.ID).UpdateColumn("hit_count", gorm.Expr("hit_count + 1"))
+				return nil, fmt.Errorf("domain '%s' diblokir oleh kebijakan keamanan Klikin (%s)", cleanDomain, bl.Category)
+			}
+		}
+	}
+
 	var page models.BioPage
 	if err := s.db.Where("user_id = ?", userID).First(&page).Error; err != nil {
 		return nil, errors.New("halaman bio tidak ditemukan")
@@ -186,6 +197,23 @@ func (s *DomainService) AddDomain(userID string, dto AddDomainDTO) (*DomainDetai
 		return nil, fmt.Errorf("gagal mendaftarkan domain: %w", err)
 	}
 
+	s.db.Create(&models.DomainDiagnosticLog{
+		ID:            fmt.Sprintf("dlog_%d", time.Now().UnixNano()),
+		DomainID:      newDomain.ID,
+		DomainName:    cleanDomain,
+		PageID:        page.ID,
+		PageSlug:      page.Slug,
+		UserID:        user.ID,
+		OwnerUsername: user.Username,
+		EventType:     "DOMAIN_ADDED",
+		Severity:      "info",
+		ErrorCode:     "PENDING_DNS",
+		Message:       fmt.Sprintf("Owner @%s mendaftarkan domain kustom %s untuk halaman /%s", user.Username, cleanDomain, page.Slug),
+		ActorID:       user.ID,
+		ActorName:     user.Username,
+		CreatedAt:     time.Now(),
+	})
+
 	// Update page reference
 	s.db.Model(&page).Update("custom_domain", cleanDomain)
 
@@ -210,6 +238,7 @@ func (s *DomainService) VerifyDomain(userID string) (*DomainDetailsResponse, err
 
 	now := time.Now()
 	domain.LastCheckedAt = &now
+	domain.CheckCount++
 	domain.Status = models.DomainStatusVerifying
 
 	// 1. Attempt real DNS resolution with 2-second timeout
@@ -252,18 +281,57 @@ func (s *DomainService) VerifyDomain(userID string) (*DomainDetailsResponse, err
 		strings.Contains(domain.Domain, "klikin"))
 
 	if isVerified || isDevDomain {
+		exp := now.AddDate(0, 0, 90)
 		domain.Status = models.DomainStatusActive
 		domain.SSLStatus = models.SSLStatusActive
+		domain.SSLIssuer = "Let's Encrypt R3"
+		domain.SSLExpiresAt = &exp
+		domain.LastErrorCode = ""
 		domain.ErrorMessage = ""
 
 		s.db.Model(&models.BioPage{}).Where("id = ?", page.ID).Updates(map[string]interface{}{
 			"custom_domain": domain.Domain,
 			"is_verified":   true,
 		})
+
+		s.db.Create(&models.DomainDiagnosticLog{
+			ID:            fmt.Sprintf("dlog_%d", time.Now().UnixNano()),
+			DomainID:      domain.ID,
+			DomainName:    domain.Domain,
+			PageID:        page.ID,
+			PageSlug:      page.Slug,
+			UserID:        userID,
+			EventType:     "DNS_CHECK",
+			Severity:      "info",
+			ErrorCode:     "OK",
+			ResolvedCNAME: domain.CNAMETarget,
+			Message:       fmt.Sprintf("Verifikasi DNS berhasil untuk %s. Sertifikat SSL Let's Encrypt aktif.", domain.Domain),
+			ActorID:       userID,
+			ActorName:     "Owner DNS Check",
+			CreatedAt:     now,
+		})
 	} else {
 		domain.Status = models.DomainStatusError
 		domain.SSLStatus = models.SSLStatusProvisioning
+		domain.LastErrorCode = "DNS_CNAME_MISMATCH"
 		domain.ErrorMessage = "Record CNAME belum terdeteksi mengarah ke cname.klikin.id. Jika baru saja menambahkan record, silakan tunggu 5-15 menit untuk propagasi DNS."
+
+		s.db.Create(&models.DomainDiagnosticLog{
+			ID:            fmt.Sprintf("dlog_%d", time.Now().UnixNano()),
+			DomainID:      domain.ID,
+			DomainName:    domain.Domain,
+			PageID:        page.ID,
+			PageSlug:      page.Slug,
+			UserID:        userID,
+			EventType:     "DNS_ERROR",
+			Severity:      "error",
+			ErrorCode:     "DNS_CNAME_MISMATCH",
+			ResolvedCNAME: strings.TrimSuffix(cnameTarget, "."),
+			Message:       domain.ErrorMessage,
+			ActorID:       userID,
+			ActorName:     "Owner DNS Check",
+			CreatedAt:     now,
+		})
 	}
 
 	domain.UpdatedAt = time.Now()
