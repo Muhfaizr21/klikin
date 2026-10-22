@@ -125,14 +125,9 @@ export default function PlatformReportsView({ token }) {
       {/* 1. Header & Global Controls */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-200">
-              Modul 3.6
-            </span>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              Analitik Platform
-            </h1>
-          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+            Analitik Platform
+          </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
             Agregat lalu lintas global, tautan terpopuler, demografi pengunjung, dan keandalan sistem Klikin.
           </p>
@@ -784,66 +779,77 @@ export default function PlatformReportsView({ token }) {
           </div>
 
           {/* ========================================================================= */}
-          {/* 6. Uptime & Error Rate Telemetry Monitoring */}
+          {/* 6. Uptime & Keandalan Infrastruktur (Clean White Slate Card) */}
           {/* ========================================================================= */}
-          <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 rounded-2xl p-5 sm:p-6 text-white shadow-md">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700/60 pb-5 mb-5">
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4 mb-5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
                   <CheckCircleIcon className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    Status Keandalan Infrastruktur Klikin
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      SLA 99.9%
-                    </span>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Keandalan Infrastruktur & Pemantauan Sistem
                   </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Telemetri real-time server gateway, database Supabase PostgreSQL, dan CDN edge
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Ketersediaan gateway, kesehatan basis data Supabase PostgreSQL, dan stabilitas server
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs font-semibold text-emerald-400">
-                  Seluruh Subsistem Beroperasi Normal
-                </span>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/70 text-xs font-semibold text-emerald-700 self-start sm:self-auto">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span>Semua Subsistem Normal • SLA 99.9%</span>
               </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-              <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-                <div className="text-slate-400 text-[11px]">Sistem Uptime (30 Hari)</div>
-                <div className="text-lg font-bold text-white font-mono mt-1">
+              <div className="bg-slate-50/70 rounded-xl p-3.5 border border-slate-100 hover:border-slate-200 transition-colors">
+                <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  SLA Uptime ({days} Hari)
+                </div>
+                <div className="text-xl font-extrabold text-slate-900 font-mono mt-1">
                   {analyticsData.summary?.system_uptime || '99.98%'}
                 </div>
-                <div className="text-[10px] text-emerald-400 mt-0.5">Sesuai komitmen SLA</div>
+                <div className="text-[11px] text-emerald-600 font-medium mt-0.5">
+                  Melampaui target 99.90%
+                </div>
               </div>
 
-              <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-                <div className="text-slate-400 text-[11px]">Tingkat Kesalahan (Error Rate)</div>
-                <div className="text-lg font-bold text-white font-mono mt-1">
+              <div className="bg-slate-50/70 rounded-xl p-3.5 border border-slate-100 hover:border-slate-200 transition-colors">
+                <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  Tingkat Kesalahan
+                </div>
+                <div className="text-xl font-extrabold text-emerald-600 font-mono mt-1">
                   {analyticsData.summary?.error_rate || '0.02%'}
                 </div>
-                <div className="text-[10px] text-emerald-400 mt-0.5">HTTP 5xx &lt; 0.1%</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  HTTP 5xx &lt; 0.10% aman
+                </div>
               </div>
 
-              <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-                <div className="text-slate-400 text-[11px]">Rata-rata Latensi API</div>
-                <div className="text-lg font-bold text-white font-mono mt-1">
+              <div className="bg-slate-50/70 rounded-xl p-3.5 border border-slate-100 hover:border-slate-200 transition-colors">
+                <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  Latensi Respon API
+                </div>
+                <div className="text-xl font-extrabold text-slate-900 font-mono mt-1">
                   24 ms <span className="text-xs text-slate-400 font-normal">p95</span>
                 </div>
-                <div className="text-[10px] text-emerald-400 mt-0.5">Respon super cepat</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  Waktu respon gateway cepat
+                </div>
               </div>
 
-              <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-                <div className="text-slate-400 text-[11px]">Koneksi Pool Basis Data</div>
-                <div className="text-lg font-bold text-white font-mono mt-1">
+              <div className="bg-slate-50/70 rounded-xl p-3.5 border border-slate-100 hover:border-slate-200 transition-colors">
+                <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  Koneksi Basis Data
+                </div>
+                <div className="text-xl font-extrabold text-slate-900 font-mono mt-1">
                   20 Pool <span className="text-xs text-slate-400 font-normal">Aktif</span>
                 </div>
-                <div className="text-[10px] text-emerald-400 mt-0.5">Supabase PostgreSQL Sehat</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  Supabase PostgreSQL sehat
+                </div>
               </div>
             </div>
           </div>

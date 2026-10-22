@@ -231,7 +231,7 @@ export default function SuperAdminDashboard({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-                  3.2 Manajemen User & Tenant
+                  Manajemen Pengguna & Tenant
                 </h2>
                 <p className="text-xs text-slate-400 font-medium mt-0.5">
                   Daftar seluruh akun Super Admin dan Pengelola Toko yang terdaftar di platform Klikin
@@ -258,7 +258,7 @@ export default function SuperAdminDashboard({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-                  3.3 Manajemen Langganan & Dunning
+                  Manajemen Langganan & Dunning
                 </h2>
                 <p className="text-xs text-slate-400 font-medium mt-0.5">
                   Monitoring status trial, active, past-due, dunning reminder, dan kupon promo
@@ -321,7 +321,7 @@ export default function SuperAdminDashboard({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-                  3.4 Manajemen Domain Kustom
+                  Manajemen Domain Kustom
                 </h2>
                 <p className="text-xs text-slate-400 font-medium mt-0.5">
                   Daftar domain kustom tenant, status DNS, dan provisioning otomatis SSL Let's Encrypt
@@ -399,7 +399,7 @@ export default function SuperAdminDashboard({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-                  3.5 Moderasi Konten & Keamanan Halaman
+                  Moderasi Konten & Keamanan Halaman
                 </h2>
                 <p className="text-xs text-slate-400 font-medium mt-0.5">
                   Tinjau laporan pengunjung, flag konten phishing, judi, atau spam, dan take-down halaman
@@ -477,7 +477,7 @@ export default function SuperAdminDashboard({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-                  3.7 Keuangan & Proyeksi Profit
+                  Keuangan & Proyeksi Profit
                 </h2>
                 <p className="text-xs text-slate-400 font-medium mt-0.5">
                   Metrik finansial: MRR, ARR, ARPU, LTV, Churn rate, dan kalkulasi profit margin
@@ -542,7 +542,7 @@ export default function SuperAdminDashboard({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-                  3.8 Support & Komunikasi Platform
+                  Support & Komunikasi Platform
                 </h2>
                 <p className="text-xs text-slate-400 font-medium mt-0.5">
                   Pusat tiket bantuan pengguna, broadcast email pengumuman, dan log komunikasi
@@ -618,7 +618,7 @@ export default function SuperAdminDashboard({
           <div className="space-y-6">
             <div>
               <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-                3.9 Pengaturan Platform
+                Pengaturan Platform
               </h2>
               <p className="text-xs text-slate-400 font-medium mt-0.5">
                 Konfigurasi umum, durasi trial, harga paket Pro, SMTP email, dan integrasi Midtrans/Stripe
@@ -656,7 +656,7 @@ export default function SuperAdminDashboard({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-                  3.10 Audit & Keamanan Platform
+                  Audit & Keamanan Platform
                 </h2>
                 <p className="text-xs text-slate-400 font-medium mt-0.5">
                   Log aktivitas audit, riwayat login IP, error stack trace, dan cadangan data manual
