@@ -226,7 +226,7 @@ Customer pemilik halaman bio. 8 modul, ~110 fitur.
 - Total klik (agregat)
 - CTR (persentase klik/tampilan)
 - Statistik per link
-- Grafik harian (7/30/90 hari)
+- Grafik harian (BISA DI SET SESAUI KALENDER)
 - Sumber trafik (Pro): IG, TikTok, Direct, Referral
 - Geo (Pro): negara/kota
 - Device (Pro): mobile vs desktop

@@ -46,7 +46,28 @@ body {
   overflow-x: hidden;
 }
 
-:focus-visible {
+/* Universal form controls: ensure crisp, solid slate-900 text on all inputs */
+input, textarea, select {
+  color: #0f172a;
+}
+input::placeholder, textarea::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+input:focus, textarea:focus, select:focus,
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: none !important;
+}
+
+/* Landing page & dark UI overrides */
+.landing-dark input,
+.bg-void input,
+.bg-carbon input {
+  color: #ffffff;
+}
+
+:focus-visible:not(input):not(textarea):not(select) {
   outline: 2px solid var(--color-acid-lime);
   outline-offset: 2px;
 }
@@ -157,4 +178,41 @@ body {
 .btn-pill-white:hover {
   opacity: 0.92;
   transform: translateY(-1px);
+}
+
+/* Link Spotlight Micro-Animations */
+@keyframes klikinWiggle {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-2deg); }
+  40% { transform: rotate(2deg); }
+  60% { transform: rotate(-1deg); }
+  80% { transform: rotate(1deg); }
+}
+
+@keyframes klikinPulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(15, 23, 42, 0.25);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 16px 4px rgba(15, 23, 42, 0.35);
+    transform: scale(1.015);
+  }
+}
+
+@keyframes klikinBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.spotlight-wiggle {
+  animation: klikinWiggle 2.5s ease-in-out infinite;
+}
+
+.spotlight-pulse {
+  animation: klikinPulseGlow 2s ease-in-out infinite;
+}
+
+.spotlight-bounce {
+  animation: klikinBounce 1.8s ease-in-out infinite;
 }

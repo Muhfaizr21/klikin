@@ -40,10 +40,33 @@ func ConnectDatabase(dsn string) (*gorm.DB, error) {
 	log.Println("✅ Successfully connected to Supabase PostgreSQL!")
 
 	// Auto-migrate tables
-	if err := db.AutoMigrate(&models.User{}, &models.BioPage{}, &models.Link{}); err != nil {
+	if err := db.AutoMigrate(
+		&models.User{},
+		&models.BioPage{},
+		&models.Link{},
+		&models.BioBlock{},
+		&models.AnalyticsEvent{},
+		&models.CustomDomain{},
+		&models.EmailCaptureConfig{},
+		&models.EmailLead{},
+		&models.Subscription{},
+		&models.Invoice{},
+		&models.PromoCode{},
+		&models.Notification{},
+		&models.TransactionalEmailLog{},
+		&models.NotificationPreference{},
+		&models.SupportTicket{},
+		&models.TicketMessage{},
+		&models.FAQItem{},
+		&models.UserFeedback{},
+	); err != nil {
 		log.Printf("⚠️ AutoMigrate warning: %v", err)
 	} else {
-		log.Println("✅ Database schema migrated successfully: users, bio_pages, links")
+		log.Println("✅ Database schema migrated successfully: all 18 core models")
+		// Add performance composite indexes for analytics
+		_ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_analytics_events_composite ON analytics_events(page_id, created_at, type);`).Error
+		_ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_analytics_events_type_created ON analytics_events(page_id, type, created_at);`).Error
+
 		// Run initial database seeder
 		if err := SeedDatabase(db); err != nil {
 			log.Printf("⚠️ SeedDatabase warning: %v", err)

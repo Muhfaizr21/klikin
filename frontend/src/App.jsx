@@ -8,6 +8,7 @@ import FAQ from './components/FAQ';
 import Footer from './components/Footer';
 import AuthPage from './components/AuthPage';
 import Dashboard from './components/Dashboard';
+import PublicBioPage from './components/PublicBioPage';
 import './App.css';
 
 export default function App() {
@@ -21,10 +22,36 @@ export default function App() {
     }
   });
 
+  const [publicSlug, setPublicSlug] = useState(() => {
+    const hash = window.location.hash.toLowerCase();
+    if (hash.startsWith('#p/')) {
+      return hash.slice(3) || 'kopiseduh';
+    }
+    return '';
+  });
+
+  const isOwnerRoute = (hash) => {
+    const clean = hash.replace(/^#/, '');
+    return [
+      'dashboard',
+      'editor',
+      'editor-bio',
+      'links',
+      'analytics',
+      'domain',
+      'leads',
+      'billing',
+      'settings',
+    ].includes(clean);
+  };
+
   const [currentView, setCurrentView] = useState(() => {
     const hash = window.location.hash.toLowerCase();
     const token = localStorage.getItem('klikin_token');
-    if (hash === '#dashboard' && token) return 'dashboard';
+    if (hash.startsWith('#p/')) return 'public_page';
+    if (isOwnerRoute(hash)) {
+      return token ? 'dashboard' : 'login';
+    }
     if (hash === '#login') return 'login';
     if (hash === '#register') return 'register';
     return 'landing';
@@ -33,7 +60,10 @@ export default function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.toLowerCase();
-      if (hash === '#dashboard') {
+      if (hash.startsWith('#p/')) {
+        setPublicSlug(hash.slice(3) || 'kopiseduh');
+        setCurrentView('public_page');
+      } else if (isOwnerRoute(hash)) {
         if (authToken) {
           setCurrentView('dashboard');
         } else {
@@ -89,6 +119,15 @@ export default function App() {
     setCurrentView('landing');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  if (currentView === 'public_page') {
+    return (
+      <PublicBioPage
+        slug={publicSlug || 'kopiseduh'}
+        onBackToHome={handleBackToHome}
+      />
+    );
+  }
 
   if (currentView === 'dashboard' && authUser && authToken) {
     return (
