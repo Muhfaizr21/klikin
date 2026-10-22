@@ -6,19 +6,55 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
 	"klikin-backend/models"
 )
 
+type analyticsCacheEntry struct {
+	data      *PlatformAnalyticsResponse
+	expiresAt time.Time
+}
+
 // PlatformAnalyticsService encapsulates business logic and database queries for Section 3.6 of README.md
 type PlatformAnalyticsService struct {
-	db *gorm.DB
+	db         *gorm.DB
+	cacheMutex sync.RWMutex
+	cache      map[int]analyticsCacheEntry
+	seedDone   bool
 }
 
 func NewPlatformAnalyticsService(db *gorm.DB) *PlatformAnalyticsService {
-	return &PlatformAnalyticsService{db: db}
+	svc := &PlatformAnalyticsService{
+		db:    db,
+		cache: make(map[int]analyticsCacheEntry),
+	}
+	go svc.initOptimization()
+	return svc
+}
+
+// initOptimization creates database composite indexes and seeds test data in background
+func (s *PlatformAnalyticsService) initOptimization() {
+	if s.db == nil {
+		return
+	}
+	// High-performance composite indexes for 1M+ rows scale
+	indexes := []string{
+		"CREATE INDEX IF NOT EXISTS idx_analytics_created_type ON analytics_events(created_at, type);",
+		"CREATE INDEX IF NOT EXISTS idx_analytics_page_created ON analytics_events(page_id, created_at);",
+		"CREATE INDEX IF NOT EXISTS idx_analytics_source_created ON analytics_events(traffic_source, created_at);",
+		"CREATE INDEX IF NOT EXISTS idx_analytics_city_created ON analytics_events(city, created_at);",
+		"CREATE INDEX IF NOT EXISTS idx_analytics_device_created ON analytics_events(device, created_at);",
+		"CREATE INDEX IF NOT EXISTS idx_analytics_browser_created ON analytics_events(browser, created_at);",
+	}
+	for _, idx := range indexes {
+		s.db.Exec(idx)
+	}
+
+	s.ensureSeedAnalytics()
+	s.seedDone = true
 }
 
 // AnalyticsMetricItem holds an aggregated metric name, count, and calculated percentage
@@ -87,8 +123,8 @@ type PlatformAnalyticsResponse struct {
 	Timeline       []DailyTimelinePoint     `json:"timeline"`
 }
 
-// GetPlatformAnalytics executes optimized aggregate SQL queries against the database
-func (s *PlatformAnalyticsService) GetPlatformAnalytics(days int) (*PlatformAnalyticsResponse, error) {
+// GetPlatformAnalytics executes optimized aggregate SQL queries against the database with caching and parallel execution
+func (s *PlatformAnalyticsService) GetPlatformAnalytics(days int, forceRefresh bool) (*PlatformAnalyticsResponse, error) {
 	if s.db == nil {
 		return nil, errors.New("database not available")
 	}
@@ -101,75 +137,127 @@ func (s *PlatformAnalyticsService) GetPlatformAnalytics(days int) (*PlatformAnal
 	}
 
 	now := time.Now()
+
+	// 1. Fast Path: In-memory cache hit (< 1ms, zero DB network roundtrips)
+	if !forceRefresh {
+		s.cacheMutex.RLock()
+		entry, exists := s.cache[days]
+		s.cacheMutex.RUnlock()
+		if exists && now.Before(entry.expiresAt) {
+			return entry.data, nil
+		}
+	}
+
 	startDate := now.AddDate(0, 0, -days)
 
-	// Ensure sample events exist if table is sparse
-	s.ensureSeedAnalytics()
+	// 2. Parallel Query Execution with sync.WaitGroup (Scalable for 1M+ users)
+	var (
+		wg sync.WaitGroup
 
-	// 1. Headline Aggregates
-	var totalViews, totalClicks int64
-	s.db.Model(&models.AnalyticsEvent{}).
-		Where("type = ? AND created_at >= ?", "view", startDate).
-		Count(&totalViews)
+		headlineRow struct {
+			TotalViews     int64 `gorm:"column:total_views"`
+			TotalClicks    int64 `gorm:"column:total_clicks"`
+			UniqueVisitors int64 `gorm:"column:unique_visitors"`
+			ActivePages    int64 `gorm:"column:active_pages"`
+		}
+		activeTenants int64
 
-	s.db.Model(&models.AnalyticsEvent{}).
-		Where("type = ? AND created_at >= ?", "click", startDate).
-		Count(&totalClicks)
+		topPages       []TopPageItem
+		topUsers       []TopUserItem
+		trafficSources []AnalyticsMetricItem
+		geoCountries   []AnalyticsMetricItem
+		geoCities      []AnalyticsMetricItem
+		devices        []AnalyticsMetricItem
+		browsers       []AnalyticsMetricItem
+		timeline       []DailyTimelinePoint
+	)
 
-	var uniqueVisitors int64
-	s.db.Model(&models.AnalyticsEvent{}).
-		Where("created_at >= ?", startDate).
-		Distinct("ip_hash").
-		Count(&uniqueVisitors)
+	// Goroutine 1: Consolidated Headline Aggregates in 1 single SQL scan
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		query := `
+			SELECT 
+				COALESCE(SUM(CASE WHEN type = 'view' THEN 1 ELSE 0 END), 0) as total_views,
+				COALESCE(SUM(CASE WHEN type = 'click' THEN 1 ELSE 0 END), 0) as total_clicks,
+				COUNT(DISTINCT ip_hash) as unique_visitors,
+				COUNT(DISTINCT page_id) as active_pages
+			FROM analytics_events
+			WHERE created_at >= ?
+		`
+		s.db.Raw(query, startDate).Scan(&headlineRow)
+	}()
 
-	var activePages int64
-	s.db.Model(&models.AnalyticsEvent{}).
-		Where("created_at >= ?", startDate).
-		Distinct("page_id").
-		Count(&activePages)
+	// Goroutine 2: Active Tenants Count
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.db.Model(&models.User{}).Where("role = ?", models.RoleAccountOwner).Count(&activeTenants)
+	}()
 
-	var activeTenants int64
-	s.db.Model(&models.User{}).
-		Where("role = ?", models.RoleAccountOwner).
-		Count(&activeTenants)
+	// Goroutine 3: Top Pages
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		topPages = s.queryTopPages(startDate)
+	}()
+
+	// Goroutine 4: Top Users
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		topUsers = s.queryTopUsers(startDate)
+	}()
+
+	// Goroutine 5: Traffic Sources
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		trafficSources = s.queryMetricBreakdown("traffic_source", startDate, 6)
+	}()
+
+	// Goroutine 6: Geo Countries & Cities
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		geoCountries = s.queryMetricBreakdown("country", startDate, 5)
+		geoCities = s.queryMetricBreakdown("city", startDate, 6)
+	}()
+
+	// Goroutine 7: Devices & Browsers
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		devices = s.queryMetricBreakdown("device", startDate, 5)
+		browsers = s.queryMetricBreakdown("browser", startDate, 6)
+	}()
+
+	// Goroutine 8: Daily Timeline
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		timeline = s.queryDailyTimeline(startDate, days)
+	}()
+
+	wg.Wait()
 
 	ctr := 0.0
-	if totalViews > 0 {
-		ctr = math.Round((float64(totalClicks)/float64(totalViews))*1000) / 10
+	if headlineRow.TotalViews > 0 {
+		ctr = math.Round((float64(headlineRow.TotalClicks)/float64(headlineRow.TotalViews))*1000) / 10
 	}
 
 	summary := PlatformAnalyticsSummary{
-		TotalPageViews: totalViews,
-		TotalClicks:    totalClicks,
+		TotalPageViews: headlineRow.TotalViews,
+		TotalClicks:    headlineRow.TotalClicks,
 		CTR:            ctr,
-		UniqueVisitors: uniqueVisitors,
-		ActivePages:    activePages,
+		UniqueVisitors: headlineRow.UniqueVisitors,
+		ActivePages:    headlineRow.ActivePages,
 		ActiveTenants:  activeTenants,
 		ErrorRate:      "0.02%",
 		SystemUptime:   "99.98%",
 	}
 
-	// 2. Top Halaman (Bio Pages with highest interactions)
-	topPages := s.queryTopPages(startDate)
-
-	// 3. Top User (Creators with highest engagement)
-	topUsers := s.queryTopUsers(startDate)
-
-	// 4. Global Traffic Sources
-	trafficSources := s.queryMetricBreakdown("traffic_source", startDate, 6)
-
-	// 5. Global Geo (Top Countries & Top Cities)
-	geoCountries := s.queryMetricBreakdown("country", startDate, 5)
-	geoCities := s.queryMetricBreakdown("city", startDate, 6)
-
-	// 6. Devices & Browsers
-	devices := s.queryMetricBreakdown("device", startDate, 5)
-	browsers := s.queryMetricBreakdown("browser", startDate, 6)
-
-	// 7. Daily Timeline (Views & Clicks per day for charts)
-	timeline := s.queryDailyTimeline(startDate, days)
-
-	return &PlatformAnalyticsResponse{
+	response := &PlatformAnalyticsResponse{
 		DaysCount:      days,
 		StartDate:      startDate.Format("2006-01-02"),
 		EndDate:        now.Format("2006-01-02"),
@@ -182,7 +270,17 @@ func (s *PlatformAnalyticsService) GetPlatformAnalytics(days int) (*PlatformAnal
 		Devices:        devices,
 		Browsers:       browsers,
 		Timeline:       timeline,
-	}, nil
+	}
+
+	// 3. Cache response in memory for 60 seconds
+	s.cacheMutex.Lock()
+	s.cache[days] = analyticsCacheEntry{
+		data:      response,
+		expiresAt: now.Add(60 * time.Second),
+	}
+	s.cacheMutex.Unlock()
+
+	return response, nil
 }
 
 // queryTopPages retrieves the highest engagement bio pages
@@ -465,9 +563,13 @@ func (s *PlatformAnalyticsService) ExportCSV(days int) ([]byte, error) {
 
 // ensureSeedAnalytics ensures that platform events exist for multiple pages
 func (s *PlatformAnalyticsService) ensureSeedAnalytics() {
+	if s.seedDone {
+		return
+	}
 	var count int64
 	s.db.Model(&models.AnalyticsEvent{}).Count(&count)
 	if count > 50 {
+		s.seedDone = true
 		return
 	}
 

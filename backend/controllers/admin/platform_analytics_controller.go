@@ -23,6 +23,7 @@ func NewPlatformAnalyticsController(service *adminService.PlatformAnalyticsServi
 // GetAnalytics returns aggregated platform analytics for 7, 30, or 90 days
 func (c *PlatformAnalyticsController) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 	daysStr := r.URL.Query().Get("days")
+	forceRefresh := r.URL.Query().Get("refresh") == "true" || r.URL.Query().Get("force") == "true"
 	days := 30
 	if daysStr != "" {
 		if parsed, err := strconv.Atoi(daysStr); err == nil && (parsed == 7 || parsed == 30 || parsed == 90) {
@@ -30,7 +31,7 @@ func (c *PlatformAnalyticsController) GetAnalytics(w http.ResponseWriter, r *htt
 		}
 	}
 
-	data, err := c.service.GetPlatformAnalytics(days)
+	data, err := c.service.GetPlatformAnalytics(days, forceRefresh)
 	if err != nil {
 		views.RenderError(w, http.StatusInternalServerError, "Gagal memuat analitik platform: "+err.Error())
 		return

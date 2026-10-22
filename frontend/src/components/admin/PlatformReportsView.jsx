@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { API_BASE } from '../../lib/api';
 import {
   EyeIcon,
@@ -20,6 +20,7 @@ import {
   LayersIcon,
   SparklesIcon,
   ShareIcon,
+  RefreshCwIcon,
 } from '../Icons';
 
 /**
@@ -29,26 +30,43 @@ import {
  * Clean Code & SOLID principles:
  * - SRP: Exclusively handles platform-wide analytical reporting, date filtering, and CSV export.
  * - Dynamic data binding: zero hardcoded statistics, all fed via GET /api/admin/analytics/platform.
+ * - SWR Client Caching: Instant (0ms) response on period switching with background revalidation.
  * - Localized 100% Bahasa Indonesia with Klikin's clean white/slate/lavender/lime design language.
  */
 export default function PlatformReportsView({ token }) {
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState(null);
   const [analyticsData, setAnalyticsData] = useState(null);
   const [geoTab, setGeoTab] = useState('cities'); // 'cities' | 'countries'
   const [hoveredPoint, setHoveredPoint] = useState(null);
+  const cacheRef = useRef({});
 
   useEffect(() => {
-    fetchPlatformAnalytics(days);
+    // If cached in client memory, show immediately (0ms) without blanking out screen
+    if (cacheRef.current[days]) {
+      setAnalyticsData(cacheRef.current[days]);
+      setLoading(false);
+      // Background silent revalidation
+      fetchPlatformAnalytics(days, false, true);
+    } else {
+      fetchPlatformAnalytics(days, false, false);
+    }
   }, [days, token]);
 
-  const fetchPlatformAnalytics = async (selectedDays) => {
-    setLoading(true);
+  const fetchPlatformAnalytics = async (selectedDays, forceRefresh = false, isBackground = false) => {
+    if (!isBackground) {
+      setLoading(true);
+    }
+    if (forceRefresh) {
+      setRefreshing(true);
+    }
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/admin/analytics/platform?days=${selectedDays}`, {
+      const url = `${API_BASE}/admin/analytics/platform?days=${selectedDays}${forceRefresh ? '&refresh=true' : ''}`;
+      const res = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token || 'demo-token-superadmin'}`,
         },
@@ -57,11 +75,15 @@ export default function PlatformReportsView({ token }) {
       if (!res.ok || !result.success) {
         throw new Error(result.message || 'Gagal memuat data analitik platform');
       }
+      cacheRef.current[selectedDays] = result.data;
       setAnalyticsData(result.data);
     } catch (err) {
-      setError(err.message);
+      if (!isBackground) {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -150,6 +172,16 @@ export default function PlatformReportsView({ token }) {
               </button>
             ))}
           </div>
+
+          <button
+            onClick={() => fetchPlatformAnalytics(days, true, false)}
+            disabled={loading || refreshing}
+            className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200/90 text-xs font-semibold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+            title="Segarkan data langsung dari basis data (bypass cache)"
+          >
+            <RefreshCwIcon className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-slate-900' : 'text-slate-500'}`} />
+            <span>{refreshing ? 'Memperbarui...' : 'Segarkan'}</span>
+          </button>
 
           <button
             onClick={handleExportCSV}
