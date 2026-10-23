@@ -1,0 +1,9 @@
+{
+  "name": "klikin-monorepo",
+  "private": true,
+  "scripts": {
+    "lint": "npm --prefix frontend run lint && (cd backend && go vet ./...)",
+    "test": "cd backend && go test ./...",
+    "build": "npm --prefix frontend run build && (cd backend && go build -o /dev/null .)"
+  }
+}

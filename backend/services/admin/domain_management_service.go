@@ -761,7 +761,7 @@ func (s *DomainManagementService) ReverifyDomainDNS(adminID, adminName, domainID
 	cnameTarget, err := resolver.LookupCNAME(ctx, cd.Domain)
 	if err == nil {
 		resolvedCNAME = strings.TrimSuffix(strings.ToLower(cnameTarget), ".")
-		if resolvedCNAME == strings.ToLower(cd.CNAMETarget) || strings.Contains(resolvedCNAME, "klikin") {
+		if resolvedCNAME == strings.ToLower(cd.CNAMETarget) || resolvedCNAME == "cname.klikin.id" || strings.HasSuffix(resolvedCNAME, ".klikin.id") {
 			cnameMatched = true
 		}
 	}

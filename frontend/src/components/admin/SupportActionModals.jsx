@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE } from '../../lib/api';
-import { XIcon, CheckCircleIcon, AlertCircleIcon, TrashIcon } from '../Icons';
+import { XIcon, AlertCircleIcon } from '../Icons';
 
 /**
  * Modal Broadcast Pengumuman ke Pengguna atau Segmen (Readme 3.8)

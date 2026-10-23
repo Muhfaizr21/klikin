@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   XIcon,
   VerifiedBadgeIcon,
   ShieldCheckIcon,
-  ShieldAlertIcon,
   GlobeIcon,
   ExternalLinkIcon,
   ClockIcon,
-  LockIcon,
   PencilIcon,
   BarChartIcon,
   TrashIcon,
@@ -21,12 +19,9 @@ import {
   SparklesIcon,
   CopyIcon,
   CheckIcon,
-  TrendingUpIcon,
-  TagIcon,
   SmartphoneIcon,
   MonitorIcon,
   ReceiptIcon,
-  DownloadIcon,
 } from '../Icons';
 import { API_BASE } from '../../lib/api';
 
@@ -38,7 +33,7 @@ export default function UserDetailDrawer({
   onEditUser,
   onImpersonate,
   onToggleVerification,
-  onRefreshParent,
+  onRefreshParent: _onRefreshParent,
 }) {
   const [activeTab, setActiveTab] = useState('profile'); // profile, pages, subscription, analytics, logs, notes
   const [loading, setLoading] = useState(false);
@@ -51,18 +46,7 @@ export default function UserDetailDrawer({
   const [copiedText, setCopiedText] = useState(null);
   const [logFilter, setLogFilter] = useState('ALL');
 
-  useEffect(() => {
-    if (isOpen && userId) {
-      fetchDetail();
-    } else {
-      setDetailData(null);
-      setError(null);
-      setActiveTab('profile');
-      setNewNote('');
-    }
-  }, [isOpen, userId]);
-
-  const fetchDetail = async () => {
+  const fetchDetail = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -81,7 +65,18 @@ export default function UserDetailDrawer({
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, token]);
+
+  useEffect(() => {
+    if (isOpen && userId) {
+      fetchDetail();
+    } else {
+      setDetailData(null);
+      setError(null);
+      setActiveTab('profile');
+      setNewNote('');
+    }
+  }, [isOpen, userId, fetchDetail]);
 
   const handleAddNote = async (e) => {
     e.preventDefault();
@@ -143,7 +138,6 @@ export default function UserDetailDrawer({
 
   const user = detailData?.user;
   const bioPages = detailData?.bio_pages || [];
-  const subscription = detailData?.subscription;
   const analytics = detailData?.analytics;
   const activityLogs = detailData?.activity_logs || [];
   const internalNotes = detailData?.internal_notes || [];

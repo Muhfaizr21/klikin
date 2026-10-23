@@ -3,11 +3,13 @@ package owner
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
 	"klikin-backend/models"
+	pageSvc "klikin-backend/services/page"
 )
 
 type OwnerService struct {
@@ -154,6 +156,7 @@ func (s *OwnerService) UpdateBioPage(userID string, dto UpdateBioPageDTO) (*mode
 		return nil, fmt.Errorf("gagal memperbarui bio page: %w", err)
 	}
 
+	pageSvc.InvalidatePublicPageCache()
 	return &page, nil
 }
 
@@ -173,6 +176,48 @@ func sanitizeCustomCSS(raw string) string {
 		}
 	}
 	return strings.TrimSpace(cleaned)
+}
+
+// sanitizeAndValidateURL prevents Stored XSS by enforcing strict protocol whitelisting (SEC-06)
+func sanitizeAndValidateURL(rawURL string) (string, error) {
+	trimmed := strings.TrimSpace(rawURL)
+	if trimmed == "" || trimmed == "#" {
+		return trimmed, nil
+	}
+
+	lower := strings.ToLower(trimmed)
+	// Explicitly reject dangerous executable or data URIs
+	disallowedPrefixes := []string{"javascript:", "data:", "vbscript:", "file:", "blob:", "about:"}
+	for _, p := range disallowedPrefixes {
+		if strings.HasPrefix(lower, p) {
+			return "", errors.New("skema URL berbahaya ditolak oleh sistem keamanan (hanya diizinkan http, https, mailto, tel, whatsapp)")
+		}
+	}
+
+	// Auto-prepend https:// if scheme is missing
+	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") &&
+		!strings.HasPrefix(lower, "mailto:") && !strings.HasPrefix(lower, "tel:") &&
+		!strings.HasPrefix(lower, "whatsapp:") {
+		trimmed = "https://" + trimmed
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return "", errors.New("format URL tidak valid")
+	}
+
+	allowedSchemes := map[string]bool{
+		"http":     true,
+		"https":    true,
+		"mailto":   true,
+		"tel":      true,
+		"whatsapp": true,
+	}
+	if !allowedSchemes[parsed.Scheme] {
+		return "", fmt.Errorf("skema URL '%s' tidak diizinkan", parsed.Scheme)
+	}
+
+	return trimmed, nil
 }
 
 // validateBlockModeration checks URL, Title, and Content against active BlacklistedDomain & Keyword rules (Module 3.5 sync)
@@ -259,6 +304,12 @@ func (s *OwnerService) CreateBlock(userID string, dto CreateBlockDTO) (*models.B
 	}
 
 	blockID := fmt.Sprintf("blk_%d", time.Now().UnixNano())
+	safeURL, err := sanitizeAndValidateURL(dto.URL)
+	if err != nil {
+		return nil, err
+	}
+	dto.URL = safeURL
+
 	if err := s.validateBlockModeration(userID, &page, blockID, dto.Title, dto.Content, dto.URL); err != nil {
 		return nil, err
 	}
@@ -289,6 +340,7 @@ func (s *OwnerService) CreateBlock(userID string, dto CreateBlockDTO) (*models.B
 		return nil, fmt.Errorf("gagal menambahkan blok: %w", err)
 	}
 
+	pageSvc.InvalidatePublicPageCache()
 	return &block, nil
 }
 
@@ -314,7 +366,11 @@ func (s *OwnerService) UpdateBlock(userID, blockID string, dto UpdateBlockDTO) (
 		block.Content = *dto.Content
 	}
 	if dto.URL != nil {
-		block.URL = *dto.URL
+		safeURL, err := sanitizeAndValidateURL(*dto.URL)
+		if err != nil {
+			return nil, err
+		}
+		block.URL = safeURL
 	}
 	var page models.BioPage
 	_ = s.db.Where("id = ?", block.PageID).First(&page).Error
@@ -345,6 +401,7 @@ func (s *OwnerService) UpdateBlock(userID, blockID string, dto UpdateBlockDTO) (
 		return nil, fmt.Errorf("gagal memperbarui blok: %w", err)
 	}
 
+	pageSvc.InvalidatePublicPageCache()
 	return &block, nil
 }
 
@@ -367,6 +424,7 @@ func (s *OwnerService) DeleteBlock(userID, blockID string) error {
 		return fmt.Errorf("gagal menghapus blok: %w", err)
 	}
 
+	pageSvc.InvalidatePublicPageCache()
 	return nil
 }
 
@@ -407,6 +465,7 @@ func (s *OwnerService) DuplicateBlock(userID, blockID string) (*models.BioBlock,
 		return nil, fmt.Errorf("gagal menduplikasi blok: %w", err)
 	}
 
+	pageSvc.InvalidatePublicPageCache()
 	return &duplicate, nil
 }
 
@@ -422,7 +481,7 @@ func (s *OwnerService) ReorderBlocks(userID string, blockIDs []string) error {
 	}
 
 	// Transaction to update orders
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	err := s.db.Transaction(func(tx *gorm.DB) error {
 		for i, id := range blockIDs {
 			if err := tx.Model(&models.BioBlock{}).
 				Where("id = ? AND page_id = ?", id, page.ID).
@@ -432,6 +491,10 @@ func (s *OwnerService) ReorderBlocks(userID string, blockIDs []string) error {
 		}
 		return nil
 	})
+	if err == nil {
+		pageSvc.InvalidatePublicPageCache()
+	}
+	return err
 }
 
 // CreateLink adds a link into the owner's page with automatic ordering
@@ -451,6 +514,12 @@ func (s *OwnerService) CreateLink(userID string, dto CreateLinkDTO) (*models.Lin
 
 	var count int64
 	s.db.Model(&models.Link{}).Where("page_id = ?", page.ID).Count(&count)
+
+	safeURL, err := sanitizeAndValidateURL(dto.URL)
+	if err != nil {
+		return nil, err
+	}
+	dto.URL = safeURL
 
 	if err := s.validateBlockModeration(userID, &page, "", dto.Title, "", dto.URL); err != nil {
 		return nil, err
@@ -473,6 +542,7 @@ func (s *OwnerService) CreateLink(userID string, dto CreateLinkDTO) (*models.Lin
 		return nil, fmt.Errorf("gagal menambahkan tautan: %w", err)
 	}
 
+	pageSvc.InvalidatePublicPageCache()
 	return &newLink, nil
 }
 
@@ -495,5 +565,6 @@ func (s *OwnerService) DeleteLink(userID, linkID string) error {
 		return fmt.Errorf("gagal menghapus tautan: %w", err)
 	}
 
+	pageSvc.InvalidatePublicPageCache()
 	return nil
 }

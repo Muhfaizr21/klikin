@@ -72,3 +72,23 @@ func (c *AuthController) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	views.RenderSuccess(w, http.StatusOK, "Sesi pengguna valid", user)
 }
+
+// Verify2FA handles 2FA TOTP or backup code verification for challenged sessions (SEC-07)
+func (c *AuthController) Verify2FA(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		ChallengeToken string `json:"challenge_token"`
+		Code           string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		views.RenderError(w, http.StatusBadRequest, "Invalid JSON payload")
+		return
+	}
+
+	result, err := c.service.Verify2FA(payload.ChallengeToken, payload.Code)
+	if err != nil {
+		views.RenderError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	views.RenderSuccess(w, http.StatusOK, "Verifikasi 2FA berhasil", result)
+}

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { API_BASE } from '../../lib/api';
 import {
-  ShieldIcon,
   ShieldCheckIcon,
   ShieldAlertIcon,
   SettingsIcon,
@@ -9,7 +8,6 @@ import {
   DownloadIcon,
   RefreshCwIcon,
   PlusIcon,
-  TrashIcon,
   BanIcon,
   SearchIcon,
   CheckCircleIcon,
@@ -29,7 +27,7 @@ import {
  * 100% real-time synchronized with PostgreSQL GORM backend.
  * Zero hardcode, zero dead buttons, strict antislop adherence (no em-dashes, full SVG icons).
  */
-export default function SecurityAuditView({ user, token }) {
+export default function SecurityAuditView({ user: _user, token }) {
   // Navigation & Sub-tabs
   const [activeSubTab, setActiveSubTab] = useState('audit'); // 'audit', 'login', 'errors', 'ratelimit', 'sessions', 'backups'
 
@@ -301,7 +299,7 @@ export default function SecurityAuditView({ user, token }) {
       } else {
         showFeedback('error', data.message || 'Gagal memblokir alamat IP.');
       }
-    } catch (err) {
+    } catch  {
       showFeedback('error', 'Terjadi kesalahan jaringan.');
     } finally {
       setIsSubmitting(false);
@@ -326,7 +324,7 @@ export default function SecurityAuditView({ user, token }) {
       } else {
         showFeedback('error', data.message || 'Gagal mengubah status pemblokiran IP.');
       }
-    } catch (err) {
+    } catch  {
       showFeedback('error', 'Terjadi kesalahan jaringan.');
     }
   };
@@ -347,7 +345,7 @@ export default function SecurityAuditView({ user, token }) {
       } else {
         showFeedback('error', data.message || 'Gagal menghapus IP.');
       }
-    } catch (err) {
+    } catch  {
       showFeedback('error', 'Terjadi kesalahan jaringan.');
     }
   };
@@ -373,7 +371,7 @@ export default function SecurityAuditView({ user, token }) {
       } else {
         showFeedback('error', data.message || 'Gagal memicu backup data.');
       }
-    } catch (err) {
+    } catch  {
       showFeedback('error', 'Terjadi kesalahan jaringan.');
     } finally {
       setIsSubmitting(false);
@@ -401,7 +399,7 @@ export default function SecurityAuditView({ user, token }) {
       } else {
         showFeedback('error', data.message || 'Gagal menyimpan kebijakan keamanan.');
       }
-    } catch (err) {
+    } catch  {
       showFeedback('error', 'Terjadi kesalahan jaringan.');
     } finally {
       setIsSubmitting(false);
@@ -427,7 +425,7 @@ export default function SecurityAuditView({ user, token }) {
       } else {
         showFeedback('error', data.message || 'Gagal memperbarui status error.');
       }
-    } catch (err) {
+    } catch  {
       showFeedback('error', 'Terjadi kesalahan jaringan.');
     } finally {
       setIsSubmitting(false);
@@ -450,7 +448,7 @@ export default function SecurityAuditView({ user, token }) {
       } else {
         showFeedback('error', data.message || 'Gagal mengakhiri sesi.');
       }
-    } catch (err) {
+    } catch  {
       showFeedback('error', 'Terjadi kesalahan jaringan.');
     }
   };
@@ -475,7 +473,7 @@ export default function SecurityAuditView({ user, token }) {
       } else {
         showFeedback('error', data.message || 'Gagal mengakhiri sesi.');
       }
-    } catch (err) {
+    } catch  {
       showFeedback('error', 'Terjadi kesalahan jaringan.');
     }
   };

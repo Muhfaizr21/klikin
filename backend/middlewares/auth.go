@@ -162,30 +162,9 @@ func RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		claims, err := config.ValidateToken(parts[1])
-		if err != nil {
-			// Dev fallback: allow demo tokens ONLY in local/development environment
-			if config.GetAppEnv() != "production" {
-				if parts[1] == "demo-token-owner-kopi" {
-					claims = &config.JWTClaims{
-						UserID:   "usr_owner_kopi",
-						Email:    "owner@klikin.id",
-						Username: "kopiseduh",
-						Role:     models.RoleAccountOwner,
-					}
-				} else if parts[1] == "demo-token-superadmin" {
-					claims = &config.JWTClaims{
-						UserID:   "usr_superadmin_1",
-						Email:    "admin@klikin.id",
-						Username: "superadmin",
-						Role:     models.RoleSuperAdmin,
-					}
-				}
-			}
-
-			if claims == nil {
-				views.RenderError(w, http.StatusUnauthorized, "Sesi tidak valid atau telah kedaluwarsa. Silakan masuk kembali.")
-				return
-			}
+		if err != nil || claims == nil {
+			views.RenderError(w, http.StatusUnauthorized, "Sesi tidak valid atau telah kedaluwarsa. Silakan masuk kembali.")
+			return
 		}
 
 		// Verify live account status & role from cache/DB

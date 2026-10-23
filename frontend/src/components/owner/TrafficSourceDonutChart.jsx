@@ -24,26 +24,30 @@ export default function TrafficSourceDonutChart({ sources }) {
     }));
   }, [sources]);
 
-  const [activeSource, setActiveSource] = useState(displaySources[0] || DEFAULT_SOURCES[0]);
-
-  React.useEffect(() => {
-    if (displaySources.length > 0) {
-      setActiveSource(displaySources[0]);
-    }
-  }, [displaySources]);
+  const [selectedSourceId, setSelectedSourceId] = useState(null);
+  const activeSource =
+    displaySources.find((src) => src.id === selectedSourceId) ||
+    displaySources[0] ||
+    DEFAULT_SOURCES[0];
+  const setActiveSource = (src) => setSelectedSourceId(src?.id || null);
 
   // SVG Donut calculation: circumference = 2 * PI * r = 2 * 3.14159 * 38 ≈ 238.76
   const radius = 38;
   const circumference = 2 * Math.PI * radius;
 
-  // Calculate stroke dash offsets
-  let cumulative = 0;
-  const segments = displaySources.map((src) => {
-    const strokeDasharray = `${(src.percentage / 100) * circumference} ${circumference}`;
-    const strokeDashoffset = -cumulative;
-    cumulative += (src.percentage / 100) * circumference;
-    return { ...src, strokeDasharray, strokeDashoffset };
-  });
+  // Calculate stroke dash offsets without mutating outer variables
+  const segments = displaySources.reduce(
+    (acc, src) => {
+      const arcLength = (src.percentage / 100) * circumference;
+      const strokeDasharray = `${arcLength} ${circumference}`;
+      const strokeDashoffset = -acc.offset;
+      return {
+        offset: acc.offset + arcLength,
+        items: [...acc.items, { ...src, strokeDasharray, strokeDashoffset }],
+      };
+    },
+    { offset: 0, items: [] }
+  ).items;
 
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between">

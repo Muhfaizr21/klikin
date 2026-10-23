@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ProfileEditor from './ProfileEditor';
 import BlocksManager from './BlocksManager';
 import ThemeSelector from './ThemeSelector';
@@ -16,7 +16,6 @@ import {
   EyeIcon,
   CopyIcon,
   ExternalLinkIcon,
-  SparklesIcon,
   SlidersIcon,
   AlertCircleIcon,
   PencilIcon,
@@ -160,7 +159,7 @@ export default function BioEditor({
   };
 
   // Save Page Settings to Backend
-  const handleSavePage = async () => {
+  const handleSavePage = useCallback(async () => {
     setSaving(true);
     setFeedback(null);
     try {
@@ -185,7 +184,7 @@ export default function BioEditor({
     } finally {
       setSaving(false);
     }
-  };
+  }, [pageDraft, token, onRefreshWorkspace]);
 
   // Keyboard shortcut Cmd+S / Ctrl+S
   useEffect(() => {
@@ -197,7 +196,7 @@ export default function BioEditor({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [pageDraft, token]);
+  }, [handleSavePage]);
 
   // Toggle publish / unpublish
   const handleTogglePublish = async () => {

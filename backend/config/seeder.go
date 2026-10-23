@@ -2,12 +2,24 @@ package config
 
 import (
 	"log"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
 	"klikin-backend/models"
 )
+
+func resolveEnvOrDefault(key, devDefault string) string {
+	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
+		return val
+	}
+	if GetAppEnv() == "production" {
+		return ""
+	}
+	return devDefault
+}
 
 // SeedDatabase seeds initial accounts (SUPER_ADMIN and ACCOUNT_OWNER) with isolated bio pages and sample links
 func SeedDatabase(db *gorm.DB) error {
@@ -15,38 +27,56 @@ func SeedDatabase(db *gorm.DB) error {
 		return nil
 	}
 
+	isProd := GetAppEnv() == "production"
+	seedDemo := strings.EqualFold(strings.TrimSpace(os.Getenv("SEED_DEMO_DATA")), "true")
+	if isProd && !seedDemo {
+		log.Println("ℹ️  [Seeder] Production environment detected and SEED_DEMO_DATA!=true. Skipping demo data seeding.")
+		return nil
+	}
+
+	adminEmail := resolveEnvOrDefault("ADMIN_SEED_EMAIL", "admin@klikin.id")
+	adminPassword := resolveEnvOrDefault("ADMIN_SEED_PASSWORD", "admin12345")
+
 	// 1. Seed SUPER_ADMIN
 	var adminCount int64
-	db.Model(&models.User{}).Where("email = ?", "admin@klikin.id").Count(&adminCount)
-	if adminCount == 0 {
-		admin := models.User{
-			ID:        "usr_superadmin_01",
-			Email:     "admin@klikin.id",
-			Username:  "superadmin",
-			FullName:  "Super Administrator",
-			Role:      models.RoleSuperAdmin,
-			IsPro:     true,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-		if err := admin.HashPassword("admin12345"); err != nil {
-			log.Printf("⚠️ Failed to hash admin password: %v", err)
-		} else {
-			if err := db.Create(&admin).Error; err != nil {
-				log.Printf("⚠️ Failed to seed superadmin: %v", err)
+	if adminEmail != "" && adminPassword != "" {
+		db.Model(&models.User{}).Where("email = ?", adminEmail).Count(&adminCount)
+		if adminCount == 0 {
+			admin := models.User{
+				ID:        "usr_superadmin_01",
+				Email:     adminEmail,
+				Username:  "superadmin",
+				FullName:  "Super Administrator",
+				Role:      models.RoleSuperAdmin,
+				IsPro:     true,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+			if err := admin.HashPassword(adminPassword); err != nil {
+				log.Printf("⚠️ Failed to hash admin password: %v", err)
 			} else {
-				log.Println("🌱 [Seeder] SuperAdmin seeded: admin@klikin.id / admin12345")
+				if err := db.Create(&admin).Error; err != nil {
+					log.Printf("⚠️ Failed to seed superadmin: %v", err)
+				} else {
+					log.Printf("🌱 [Seeder] SuperAdmin seeded: %s", adminEmail)
+				}
 			}
 		}
 	}
 
+	ownerEmail := resolveEnvOrDefault("OWNER_SEED_EMAIL", "owner@klikin.id")
+	ownerPassword := resolveEnvOrDefault("OWNER_SEED_PASSWORD", "owner12345")
+
 	// 2. Seed ACCOUNT_OWNER 1: Kopi Seduh Nusantara (UMKM Creator)
 	var ownerCount int64
-	db.Model(&models.User{}).Where("email = ?", "owner@klikin.id").Count(&ownerCount)
+	if ownerEmail == "" || ownerPassword == "" {
+		return nil
+	}
+	db.Model(&models.User{}).Where("email = ?", ownerEmail).Count(&ownerCount)
 	if ownerCount == 0 {
 		owner := models.User{
 			ID:        "usr_owner_kopi",
-			Email:     "owner@klikin.id",
+			Email:     ownerEmail,
 			Username:  "kopiseduh",
 			FullName:  "Kopi Seduh Nusantara",
 			Role:      models.RoleAccountOwner,
@@ -54,13 +84,13 @@ func SeedDatabase(db *gorm.DB) error {
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		}
-		if err := owner.HashPassword("owner12345"); err != nil {
+		if err := owner.HashPassword(ownerPassword); err != nil {
 			log.Printf("⚠️ Failed to hash owner password: %v", err)
 		} else {
 			if err := db.Create(&owner).Error; err != nil {
 				log.Printf("⚠️ Failed to seed owner: %v", err)
 			} else {
-				log.Println("🌱 [Seeder] Account Owner seeded: owner@klikin.id / owner12345")
+				log.Printf("🌱 [Seeder] Account Owner seeded: %s", ownerEmail)
 
 				// Seed isolated BioPage for this Owner
 				kopiPage := models.BioPage{

@@ -1,14 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { API_BASE } from '../../lib/api';
 import {
   XIcon,
   CreditCardIcon,
   SparklesIcon,
   ClockIcon,
-  ReceiptIcon,
-  CheckIcon,
-  AlertCircleIcon,
-  ExternalLinkIcon,
   BanIcon,
   VerifiedBadgeIcon,
 } from '../Icons';
@@ -31,16 +27,7 @@ export default function SubscriptionDetailDrawer({
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (isOpen && userId) {
-      fetchDetail();
-    } else {
-      setDetail(null);
-      setActiveTab('overview');
-    }
-  }, [isOpen, userId]);
-
-  const fetchDetail = async () => {
+  const fetchDetail = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -59,7 +46,16 @@ export default function SubscriptionDetailDrawer({
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, token]);
+
+  useEffect(() => {
+    if (isOpen && userId) {
+      fetchDetail();
+    } else {
+      setDetail(null);
+      setActiveTab('overview');
+    }
+  }, [isOpen, userId, fetchDetail]);
 
   if (!isOpen) return null;
 

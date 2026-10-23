@@ -3,17 +3,13 @@ import {
   XIcon,
   CheckIcon,
   SparklesIcon,
-  BarChartIcon,
-  DownloadIcon,
-  GlobeIcon,
-  LockIcon,
 } from '../Icons';
 import { navigateTo } from '../../utils/navigation';
 
 export default function AnalyticsPaywallModal({
   isOpen,
   onClose,
-  onSimulateUpgrade,
+  onSimulateUpgrade: _onSimulateUpgrade,
   featureName = 'Fitur Analitik Lanjutan',
 }) {
   if (!isOpen) return null;

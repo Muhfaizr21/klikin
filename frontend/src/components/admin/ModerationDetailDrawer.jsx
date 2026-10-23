@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { API_BASE } from '../../lib/api';
 import {
   XIcon,
@@ -43,16 +43,7 @@ export default function ModerationDetailDrawer({
   const [error, setError] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && pageId) {
-      fetchDetail();
-    } else {
-      setDetail(null);
-      setActiveTab('links');
-    }
-  }, [isOpen, pageId]);
-
-  const fetchDetail = async () => {
+  const fetchDetail = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -69,7 +60,16 @@ export default function ModerationDetailDrawer({
     } finally {
       setLoading(false);
     }
-  };
+  }, [pageId, token]);
+
+  useEffect(() => {
+    if (isOpen && pageId) {
+      fetchDetail();
+    } else {
+      setDetail(null);
+      setActiveTab('links');
+    }
+  }, [isOpen, pageId, fetchDetail]);
 
   const handleClearFlagOrRestore = async (type) => {
     if (!detail?.page) return;

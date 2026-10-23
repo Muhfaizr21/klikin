@@ -1,18 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   CreditCardIcon,
   CheckIcon,
   AlertCircleIcon,
-  ExternalLinkIcon,
   RefreshCwIcon,
   ShieldCheckIcon,
   SparklesIcon,
   DownloadIcon,
-  CalendarIcon,
   TagIcon,
   ClockIcon,
   ArrowRightIcon,
-  XIcon,
   SearchIcon,
   ReceiptIcon,
   ZapIcon,
@@ -23,7 +20,7 @@ import { API_BASE } from '../../lib/api';
 export default function OwnerBilling({ user, token, onRefreshUser }) {
   const [loading, setLoading] = useState(true);
   const [billingData, setBillingData] = useState(null);
-  const [error, setError] = useState(null);
+  const [_error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
@@ -56,14 +53,10 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
     promoDeals: false,
   });
 
-  const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
-  const effectiveUserId = user?.id || 'usr_owner_kopi';
+  const authToken = token || localStorage.getItem('klikin_token') || '';
+  const effectiveUserId = user?.id || '';
 
-  useEffect(() => {
-    fetchBillingOverview();
-  }, []);
-
-  const fetchBillingOverview = async () => {
+  const fetchBillingOverview = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -83,7 +76,11 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [authToken]);
+
+  useEffect(() => {
+    fetchBillingOverview();
+  }, [fetchBillingOverview]);
 
   const handleStartTrial = async () => {
     if (!confirm('Aktifkan uji coba gratis 14 hari Klikin Pro sekarang?')) return;
@@ -146,30 +143,36 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
 
   const ensureMidtransSnapLoaded = (clientKey, isProduction) => {
     return new Promise((resolve) => {
+      const targetSrc = isProduction
+        ? 'https://app.midtrans.com/snap/snap.js'
+        : 'https://app.sandbox.midtrans.com/snap/snap.js';
+
+      const existing = document.querySelector('script[src*="midtrans.com/snap/snap.js"]');
+      if (existing) {
+        if (existing.src === targetSrc) {
+          if (clientKey) {
+            existing.setAttribute('data-client-key', clientKey);
+          }
+          if (window.snap) {
+            resolve(true);
+            return;
+          }
+        } else {
+          // Lingkungan berganti antara Sandbox dan Produksi
+          existing.remove();
+          try {
+            delete window.snap;
+          } catch  {
+            window.snap = undefined;
+          }
+        }
+      }
+
       if (window.snap) {
         resolve(true);
         return;
       }
-      const targetSrc = isProduction
-        ? 'https://app.midtrans.com/snap/snap.js'
-        : 'https://app.sandbox.midtrans.com/snap/snap.js';
-      const existing = document.querySelector('script[src*="midtrans.com/snap/snap.js"]');
-      if (existing) {
-        if (clientKey) {
-          existing.setAttribute('data-client-key', clientKey);
-        }
-        let attempts = 0;
-        const interval = setInterval(() => {
-          if (window.snap) {
-            clearInterval(interval);
-            resolve(true);
-          } else if (++attempts > 30) {
-            clearInterval(interval);
-            resolve(false);
-          }
-        }, 100);
-        return;
-      }
+
       const script = document.createElement('script');
       script.src = targetSrc;
       if (clientKey) {
@@ -316,7 +319,7 @@ export default function OwnerBilling({ user, token, onRefreshUser }) {
 
     if (window.snap) {
       window.snap.pay(inv.snap_token, {
-        onSuccess: async function (paymentResult) {
+        onSuccess: async function (_paymentResult) {
           try {
             await fetch(`${API_BASE}/owner/billing/verify-midtrans`, {
               method: 'POST',

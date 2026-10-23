@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { API_BASE } from '../../lib/api';
 import {
   EyeIcon,
@@ -18,7 +18,6 @@ import {
   TwitterIcon,
   ClockIcon,
   LayersIcon,
-  SparklesIcon,
   ShareIcon,
   RefreshCwIcon,
 } from '../Icons';
@@ -44,19 +43,7 @@ export default function PlatformReportsView({ token }) {
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const cacheRef = useRef({});
 
-  useEffect(() => {
-    // If cached in client memory, show immediately (0ms) without blanking out screen
-    if (cacheRef.current[days]) {
-      setAnalyticsData(cacheRef.current[days]);
-      setLoading(false);
-      // Background silent revalidation
-      fetchPlatformAnalytics(days, false, true);
-    } else {
-      fetchPlatformAnalytics(days, false, false);
-    }
-  }, [days, token]);
-
-  const fetchPlatformAnalytics = async (selectedDays, forceRefresh = false, isBackground = false) => {
+  const fetchPlatformAnalytics = useCallback(async (selectedDays, forceRefresh = false, isBackground = false) => {
     if (!isBackground) {
       setLoading(true);
     }
@@ -68,7 +55,7 @@ export default function PlatformReportsView({ token }) {
       const url = `${API_BASE}/admin/analytics/platform?days=${selectedDays}${forceRefresh ? '&refresh=true' : ''}`;
       const res = await fetch(url, {
         headers: {
-          Authorization: `Bearer ${token || 'demo-token-superadmin'}`,
+          Authorization: `Bearer ${token || localStorage.getItem('klikin_token') || ''}`,
         },
       });
       const result = await res.json();
@@ -85,14 +72,26 @@ export default function PlatformReportsView({ token }) {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    // If cached in client memory, show immediately (0ms) without blanking out screen
+    if (cacheRef.current[days]) {
+      setAnalyticsData(cacheRef.current[days]);
+      setLoading(false);
+      // Background silent revalidation
+      fetchPlatformAnalytics(days, false, true);
+    } else {
+      fetchPlatformAnalytics(days, false, false);
+    }
+  }, [days, fetchPlatformAnalytics]);
 
   const handleExportCSV = async () => {
     setExporting(true);
     try {
       const res = await fetch(`${API_BASE}/admin/analytics/export?days=${days}`, {
         headers: {
-          Authorization: `Bearer ${token || 'demo-token-superadmin'}`,
+          Authorization: `Bearer ${token || localStorage.getItem('klikin_token') || ''}`,
         },
       });
       if (!res.ok) {

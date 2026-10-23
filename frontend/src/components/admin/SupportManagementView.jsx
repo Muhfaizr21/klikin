@@ -12,9 +12,7 @@ import {
   UsersIcon,
   CopyIcon,
   CheckIcon,
-  ExternalLinkIcon,
   TrashIcon,
-  FilterIcon,
 } from '../Icons';
 import SupportDetailDrawer from './SupportDetailDrawer';
 import {
@@ -27,7 +25,7 @@ import {
 /**
  * Super Admin Support & Komunikasi Platform (Readme Section 3.8)
  */
-export default function SupportManagementView({ user, token }) {
+export default function SupportManagementView({ user: _user, token }) {
   // Navigation sub-tabs
   const [subTab, setSubTab] = useState('inbox'); // 'inbox' | 'canned' | 'broadcast' | 'logs'
 

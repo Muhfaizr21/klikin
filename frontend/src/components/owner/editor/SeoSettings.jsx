@@ -1,5 +1,5 @@
 import React from 'react';
-import { GlobeIcon, ImageIcon, UploadIcon } from '../../Icons';
+import { ImageIcon, UploadIcon } from '../../Icons';
 import { fileToWebP } from '../../../utils/imageUtils';
 
 export default function SeoSettings({

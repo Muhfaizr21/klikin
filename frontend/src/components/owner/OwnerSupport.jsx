@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   LifeBuoyIcon,
   HelpCircleIcon,
@@ -142,24 +142,9 @@ export default function OwnerSupport({ user, token }) {
   });
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
-  const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
+  const authToken = token || localStorage.getItem('klikin_token') || '';
 
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
-
-  const fetchInitialData = async () => {
-    setLoading(true);
-    try {
-      await Promise.all([fetchTickets(), fetchFAQs()]);
-    } catch (err) {
-      console.error('Error fetching support data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/owner/support/tickets`, {
         headers: {
@@ -173,9 +158,9 @@ export default function OwnerSupport({ user, token }) {
     } catch (err) {
       console.error('Fetch tickets error:', err);
     }
-  };
+  }, [authToken]);
 
-  const fetchFAQs = async () => {
+  const fetchFAQs = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/owner/support/faq`);
       const result = await res.json();
@@ -185,7 +170,22 @@ export default function OwnerSupport({ user, token }) {
     } catch (err) {
       console.error('Fetch FAQ error:', err);
     }
-  };
+  }, []);
+
+  const fetchInitialData = useCallback(async () => {
+    setLoading(true);
+    try {
+      await Promise.all([fetchTickets(), fetchFAQs()]);
+    } catch (err) {
+      console.error('Error fetching support data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchTickets, fetchFAQs]);
+
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]);
 
   const fetchTicketDetails = async (ticketId) => {
     setTicketDetailsLoading(true);
@@ -201,7 +201,7 @@ export default function OwnerSupport({ user, token }) {
       } else {
         showFeedback(result.error || 'Gagal memuat detail tiket', 'error');
       }
-    } catch (err) {
+    } catch  {
       showFeedback('Koneksi terputus saat mengambil detail tiket', 'error');
     } finally {
       setTicketDetailsLoading(false);
@@ -243,7 +243,7 @@ export default function OwnerSupport({ user, token }) {
       } else {
         showFeedback(result.error || 'Gagal membuat tiket', 'error');
       }
-    } catch (err) {
+    } catch  {
       showFeedback('Koneksi bermasalah saat mengirim tiket', 'error');
     } finally {
       setCreatingTicket(false);
@@ -277,7 +277,7 @@ export default function OwnerSupport({ user, token }) {
       } else {
         showFeedback(result.error || 'Gagal mengirim balasan', 'error');
       }
-    } catch (err) {
+    } catch  {
       showFeedback('Gagal mengirim balasan tiket', 'error');
     } finally {
       setSendingReply(false);
@@ -312,7 +312,7 @@ export default function OwnerSupport({ user, token }) {
       } else {
         showFeedback(result.error || 'Gagal mengirim pesan', 'error');
       }
-    } catch (err) {
+    } catch  {
       showFeedback('Gagal menghubungi tim Klikin', 'error');
     } finally {
       setSubmittingContact(false);
@@ -348,7 +348,7 @@ export default function OwnerSupport({ user, token }) {
       } else {
         showFeedback(result.error || 'Gagal mengirim masukan', 'error');
       }
-    } catch (err) {
+    } catch  {
       showFeedback('Gagal mengirimkan feedback', 'error');
     } finally {
       setSubmittingFeedback(false);
@@ -485,10 +485,6 @@ export default function OwnerSupport({ user, token }) {
 
     return matchStatus && matchSearch;
   });
-
-  const activeTicketsCount = tickets.filter(
-    (t) => t.status === 'open' || t.status === 'in_progress' || t.status === 'waiting_user'
-  ).length;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-16 font-sans">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   GlobeIcon,
   CheckIcon,
@@ -9,17 +9,15 @@ import {
   TrashIcon,
   ShieldCheckIcon,
   ServerIcon,
-  LockIcon,
   SparklesIcon,
-  SearchIcon,
 } from '../Icons';
 import AnalyticsPaywallModal from './AnalyticsPaywallModal';
 import { API_BASE } from '../../lib/api';
 
 export default function OwnerCustomDomain({ user, token }) {
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
+  const [_error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Free vs Pro preview mode (user can test both)
@@ -41,15 +39,11 @@ export default function OwnerCustomDomain({ user, token }) {
   // Status feedback toast
   const [feedback, setFeedback] = useState(null);
 
-  useEffect(() => {
-    fetchDomainInfo();
-  }, []);
-
-  const fetchDomainInfo = async () => {
+  const fetchDomainInfo = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
+      const authToken = token || localStorage.getItem('klikin_token') || '';
       const res = await fetch(`${API_BASE}/owner/domain`, {
         headers: {
           Authorization: `Bearer ${authToken}`,
@@ -76,7 +70,11 @@ export default function OwnerCustomDomain({ user, token }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    fetchDomainInfo();
+  }, [fetchDomainInfo]);
 
   const handleAddDomain = async (e) => {
     e.preventDefault();
@@ -94,7 +92,7 @@ export default function OwnerCustomDomain({ user, token }) {
     setFormError(null);
     setActionLoading(true);
     try {
-      const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
+      const authToken = token || localStorage.getItem('klikin_token') || '';
       const res = await fetch(`${API_BASE}/owner/domain`, {
         method: 'POST',
         headers: {
@@ -126,7 +124,7 @@ export default function OwnerCustomDomain({ user, token }) {
   const handleVerifyDNS = async () => {
     setActionLoading(true);
     try {
-      const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
+      const authToken = token || localStorage.getItem('klikin_token') || '';
       const res = await fetch(`${API_BASE}/owner/domain/verify`, {
         method: 'POST',
         headers: {
@@ -160,7 +158,7 @@ export default function OwnerCustomDomain({ user, token }) {
     if (key === 'fallback_subdomain') setFallbackSubdomain(val);
 
     try {
-      const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
+      const authToken = token || localStorage.getItem('klikin_token') || '';
       const res = await fetch(`${API_BASE}/owner/domain`, {
         method: 'PUT',
         headers: {
@@ -185,7 +183,7 @@ export default function OwnerCustomDomain({ user, token }) {
   const handleDeleteDomain = async () => {
     setActionLoading(true);
     try {
-      const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
+      const authToken = token || localStorage.getItem('klikin_token') || '';
       const res = await fetch(`${API_BASE}/owner/domain`, {
         method: 'DELETE',
         headers: {

@@ -1,8 +1,12 @@
 import React from 'react';
 import { ZapIcon } from '../Icons';
 
-export default function TopTenantPerformanceCard({ onActionClick }) {
-  const tenants = [
+export default function TopTenantPerformanceCard({
+  tenants: propTenants,
+  recommendationHint,
+  onActionClick,
+}) {
+  const defaultTenants = [
     {
       id: 'kopi_seduh',
       name: 'Kopi Seduh Nusantara',
@@ -45,13 +49,15 @@ export default function TopTenantPerformanceCard({ onActionClick }) {
     },
   ];
 
+  const tenants = (propTenants && propTenants.length > 0) ? propTenants : defaultTenants;
+
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-2xs flex flex-col justify-between">
       {/* Header */}
       <div className="pb-4 border-b border-slate-100">
         <h3 className="text-base font-bold text-slate-900">Performa & Keaktifan Tenant</h3>
         <p className="text-xs text-slate-400 font-medium mt-0.5">
-          Klik terverifikasi ÷ alokasi kapasitas bio link • Sep
+          Klik terverifikasi ÷ alokasi kapasitas bio link • Realtime
         </p>
       </div>
 
@@ -67,11 +73,13 @@ export default function TopTenantPerformanceCard({ onActionClick }) {
                 className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-2xs shrink-0 bg-slate-100"
                 onError={(e) => {
                   e.target.style.display = 'none';
-                  e.target.nextSibling.style.display = 'flex';
+                  if (e.target.nextSibling) {
+                    e.target.nextSibling.style.display = 'flex';
+                  }
                 }}
               />
               <div className="w-8 h-8 rounded-full bg-slate-200 hidden items-center justify-center text-xs font-bold text-slate-700 shrink-0">
-                {t.initials}
+                {t.initials || 'KL'}
               </div>
               <div className="truncate">
                 <h4 className="text-xs font-bold text-slate-900 truncate leading-snug">{t.name}</h4>
@@ -84,7 +92,7 @@ export default function TopTenantPerformanceCard({ onActionClick }) {
             {/* Horizontal Bar */}
             <div className="flex-1 max-w-[160px] bg-slate-100/80 h-2.5 rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all duration-500 ${t.barColor}`}
+                className={`h-full rounded-full transition-all duration-500 ${t.barColor || 'bg-[#6366f1]'}`}
                 style={{ width: t.rate }}
               />
             </div>
@@ -104,7 +112,9 @@ export default function TopTenantPerformanceCard({ onActionClick }) {
           className="bg-[#f0fdf4] hover:bg-[#e6fce8] border border-[#d9f99d] rounded-xl p-2.5 px-3 flex items-center gap-2 text-[11px] text-emerald-900 font-semibold cursor-pointer transition-colors shadow-2xs"
         >
           <ZapIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-          <span className="truncate">💡 Hubungkan domain kustom kopiseduh.id untuk angkat rasio konversi ~75%</span>
+          <span className="truncate">
+            {recommendationHint || '💡 Hubungkan domain kustom kopiseduh.id untuk angkat rasio konversi ~75%'}
+          </span>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 
-export default function JourneyConversionCard() {
-  const funnelStages = [
+export default function JourneyConversionCard({ stages: propStages, dropoffAlert }) {
+  const defaultFunnelStages = [
     {
       id: 'visit',
       name: 'Buka Bio',
@@ -70,6 +70,8 @@ export default function JourneyConversionCard() {
     },
   ];
 
+  const funnelStages = (propStages && propStages.length > 0) ? propStages : defaultFunnelStages;
+
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-2xs flex flex-col justify-between">
       {/* Header with Alert Pill */}
@@ -83,7 +85,7 @@ export default function JourneyConversionCard() {
 
         {/* Highlighted Warning Pill */}
         <span className="self-start sm:self-auto text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-full shadow-2xs">
-          Penurunan Terbesar: Eksplor Link → Pilih Produk
+          {dropoffAlert || 'Penurunan Terbesar: Eksplor Link → Pilih Produk'}
         </span>
       </div>
 

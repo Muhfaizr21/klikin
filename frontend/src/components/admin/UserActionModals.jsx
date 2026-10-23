@@ -6,9 +6,7 @@ import {
   BanIcon,
   TrashIcon,
   ShieldAlertIcon,
-  CheckIcon,
   UsersIcon,
-  ExternalLinkIcon,
 } from '../Icons';
 import { API_BASE } from '../../lib/api';
 
@@ -81,7 +79,7 @@ export function EditUserModal({ user, token, isOpen, onClose, onSuccess }) {
         throw new Error(data.message || 'Gagal memperbarui data pengguna');
       }
 
-      onSuccess && onSuccess(data.message || 'Data pengguna berhasil diperbarui');
+      onSuccess?.(data.message || 'Data pengguna berhasil diperbarui');
       onClose();
     } catch (err) {
       setError(err.message);
@@ -274,7 +272,7 @@ export function SuspendUserModal({ user, token, isOpen, onClose, onSuccess }) {
         throw new Error(data.message || 'Gagal menangguhkan akun');
       }
 
-      onSuccess && onSuccess(`Akun @${user.username} berhasil ditangguhkan sementara.`);
+      onSuccess?.(`Akun @${user.username} berhasil ditangguhkan sementara.`);
       onClose();
     } catch (err) {
       setError(err.message);
@@ -370,7 +368,7 @@ export function BanUserModal({ user, token, isOpen, onClose, onSuccess }) {
         throw new Error(data.message || 'Gagal memblokir pengguna');
       }
 
-      onSuccess && onSuccess(`Akun @${user.username} berhasil diblokir secara permanen.`);
+      onSuccess?.(`Akun @${user.username} berhasil diblokir secara permanen.`);
       onClose();
     } catch (err) {
       setError(err.message);
@@ -471,7 +469,7 @@ export function DeleteUserModal({ user, token, isOpen, onClose, onSuccess }) {
         throw new Error(data.message || 'Gagal menghapus pengguna');
       }
 
-      onSuccess && onSuccess(data.message || 'Pengguna berhasil dihapus');
+      onSuccess?.(data.message || 'Pengguna berhasil dihapus');
       onClose();
     } catch (err) {
       setError(err.message);
@@ -607,7 +605,7 @@ export function ImpersonateModal({ user, token, isOpen, onClose, onImpersonateSu
         throw new Error(data.message || 'Gagal membuat sesi impersonasi');
       }
 
-      onImpersonateSuccess && onImpersonateSuccess(data.data);
+      onImpersonateSuccess?.(data.data);
       onClose();
     } catch (err) {
       setError(err.message);

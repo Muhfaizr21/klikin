@@ -1,9 +1,9 @@
 import React from 'react';
 
-export default function CohortRetentionCard() {
-  const months = ['B1', 'B2', 'B3', 'B4', 'B5'];
+export default function CohortRetentionCard({ cohorts: propCohorts, months: propMonths }) {
+  const defaultMonths = ['B1', 'B2', 'B3', 'B4', 'B5'];
 
-  const cohorts = [
+  const defaultCohorts = [
     {
       label: 'Apr',
       data: [
@@ -55,6 +55,9 @@ export default function CohortRetentionCard() {
       ],
     },
   ];
+
+  const months = (propMonths && propMonths.length > 0) ? propMonths : defaultMonths;
+  const cohorts = (propCohorts && propCohorts.length > 0) ? propCohorts : defaultCohorts;
 
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-2xs flex flex-col justify-between">

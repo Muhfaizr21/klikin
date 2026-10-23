@@ -27,8 +27,10 @@ type User struct {
 	Website           string     `gorm:"type:varchar(255)" json:"website"`
 	Timezone          string     `gorm:"type:varchar(64);default:'Asia/Jakarta'" json:"timezone"`
 	Language          string     `gorm:"type:varchar(10);default:'id'" json:"language"`
-	TwoFactorEnabled  bool       `gorm:"default:false" json:"two_factor_enabled"`
-	PasswordChangedAt *time.Time `json:"password_changed_at,omitempty"`
+	TwoFactorEnabled     bool       `gorm:"default:false" json:"two_factor_enabled"`
+	TwoFactorSecret      string     `gorm:"type:varchar(128)" json:"-"`
+	TwoFactorBackupCodes string     `gorm:"type:text" json:"-"`
+	PasswordChangedAt    *time.Time `json:"password_changed_at,omitempty"`
 	Status            string     `gorm:"type:varchar(32);default:'active'" json:"status"` // "active" | "suspended" | "banned"
 	StatusReason      string     `gorm:"type:text" json:"status_reason,omitempty"`
 	IsVerified        bool       `gorm:"default:false" json:"is_verified"`

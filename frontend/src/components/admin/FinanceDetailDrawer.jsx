@@ -1,12 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   XIcon,
-  CreditCardIcon,
-  CheckCircleIcon,
-  AlertCircleIcon,
   ExternalLinkIcon,
-  ServerIcon,
-  ShieldCheckIcon,
   EditIcon,
   TrashIcon,
 } from '../Icons';

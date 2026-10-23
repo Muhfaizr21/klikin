@@ -33,7 +33,6 @@ export default function MobilePreviewFrame({ page, blocks = [], onEditProfile })
     page_shadow = 'none',
     bg_image_url = '',
     custom_css = '',
-    slug = 'kopiseduh',
     is_pro = false,
   } = page || {};
 

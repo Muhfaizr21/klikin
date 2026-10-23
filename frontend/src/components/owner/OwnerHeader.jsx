@@ -44,6 +44,12 @@ const TAB_CONFIG = {
   },
 };
 
+const FORMATTED_TODAY = new Date().toLocaleDateString('id-ID', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
 export default function OwnerHeader({
   user,
   activeTab = 'dashboard',
@@ -51,14 +57,8 @@ export default function OwnerHeader({
   onSelectTab,
   unreadCount = 2,
 }) {
-  const formattedDate = new Date().toLocaleDateString('id-ID', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-
   const tabInfo = TAB_CONFIG[activeTab] || TAB_CONFIG.dashboard;
-  const subtitle = tabInfo.subtitle || formattedDate;
+  const subtitle = tabInfo.subtitle || FORMATTED_TODAY;
 
   return (
     <header className="flex items-center justify-between pb-5 sm:pb-6 border-b border-slate-100 mb-6">

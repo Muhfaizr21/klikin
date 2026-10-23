@@ -250,7 +250,7 @@ func (s *DomainService) VerifyDomain(userID string) (*DomainDetailsResponse, err
 	cnameTarget, err := resolver.LookupCNAME(ctx, domain.Domain)
 	if err == nil {
 		cnameClean := strings.TrimSuffix(strings.ToLower(cnameTarget), ".")
-		if cnameClean == "cname.klikin.id" || strings.Contains(cnameClean, "klikin") {
+		if cnameClean == "cname.klikin.id" || strings.HasSuffix(cnameClean, ".klikin.id") || cnameClean == "klikin.id" {
 			cnameMatched = true
 		}
 	}

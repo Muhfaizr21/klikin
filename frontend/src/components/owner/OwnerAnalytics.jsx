@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import AnalyticsPaywallModal from './AnalyticsPaywallModal';
 import TimelineActivityChart from './analytics/TimelineActivityChart';
 import HourlyDistributionChart from './analytics/HourlyDistributionChart';
@@ -7,19 +7,31 @@ import PlatformDevicesChart from './analytics/PlatformDevicesChart';
 import {
   CalendarIcon,
   DownloadIcon,
-  GlobeIcon,
   LockIcon,
   TrendingUpIcon,
   UsersIcon,
   MousePointerIcon,
   SparklesIcon,
-  CheckIcon,
   ExternalLinkIcon,
-  EyeIcon,
   SearchIcon,
-  FilterIcon,
 } from '../Icons';
 import { API_BASE } from '../../lib/api';
+
+function computePresetDateRange(newPreset) {
+  const now = new Date();
+  const end = now.toISOString().split('T')[0];
+  const startD = new Date();
+
+  if (newPreset === '7d') {
+    startD.setDate(now.getDate() - 6);
+  } else if (newPreset === '30d') {
+    startD.setDate(now.getDate() - 29);
+  } else if (newPreset === '90d') {
+    startD.setDate(now.getDate() - 89);
+  }
+
+  return { start: startD.toISOString().split('T')[0], end };
+}
 
 export default function OwnerAnalytics({ user, token }) {
   // Preset: '7d' | '30d' | '90d' | 'custom'
@@ -34,9 +46,9 @@ export default function OwnerAnalytics({ user, token }) {
   });
 
   const [isCustomCalendarOpen, setIsCustomCalendarOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [analyticsData, setAnalyticsData] = useState(null);
-  const [error, setError] = useState(null);
+  const [_error, setError] = useState(null);
 
   // Pro status from authenticated user & live analytics response
   const isPro = Boolean(user?.is_pro || analyticsData?.is_pro);
@@ -48,12 +60,7 @@ export default function OwnerAnalytics({ user, token }) {
   // Geo view tab: 'city' | 'country'
   const [geoTab, setGeoTab] = useState('city');
 
-  // Fetch analytics data when parameters change
-  useEffect(() => {
-    fetchAnalytics();
-  }, [preset, startDate, endDate]);
-
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -85,7 +92,12 @@ export default function OwnerAnalytics({ user, token }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [preset, startDate, endDate, token]);
+
+  // Fetch analytics data when parameters change
+  useEffect(() => {
+    fetchAnalytics();
+  }, [fetchAnalytics]);
 
   const handleApplyPreset = (newPreset) => {
     if (!isPro && newPreset !== '7d') {
@@ -100,19 +112,8 @@ export default function OwnerAnalytics({ user, token }) {
     setPreset(newPreset);
     setIsCustomCalendarOpen(false);
 
-    const now = new Date();
-    const end = now.toISOString().split('T')[0];
-    let startD = new Date();
-
-    if (newPreset === '7d') {
-      startD.setDate(now.getDate() - 6);
-    } else if (newPreset === '30d') {
-      startD.setDate(now.getDate() - 29);
-    } else if (newPreset === '90d') {
-      startD.setDate(now.getDate() - 89);
-    }
-
-    setStartDate(startD.toISOString().split('T')[0]);
+    const { start, end } = computePresetDateRange(newPreset);
+    setStartDate(start);
     setEndDate(end);
   };
 
@@ -175,7 +176,7 @@ export default function OwnerAnalytics({ user, token }) {
   }, [analyticsData?.links_breakdown, linkSearchQuery]);
 
   // Sparklines for KPI Cards
-  const timeline = analyticsData?.timeline || [];
+  const timeline = useMemo(() => analyticsData?.timeline || [], [analyticsData?.timeline]);
   const sparklineViews = useMemo(() => timeline.map((t) => t.views || 0), [timeline]);
   const sparklineClicks = useMemo(() => timeline.map((t) => t.clicks || 0), [timeline]);
   const sparklineCTR = useMemo(() => timeline.map((t) => t.ctr || 0), [timeline]);

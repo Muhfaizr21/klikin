@@ -10,10 +10,10 @@ import {
   AlertCircleIcon,
   XIcon,
   RefreshCwIcon,
-  ExternalLinkIcon,
   ShieldCheckIcon,
   ShieldAlertIcon,
-  LockIcon,
+  EyeIcon,
+  EyeOffIcon,
 } from '../Icons';
 
 /**
@@ -21,7 +21,7 @@ import {
  * 100% Real-time sync with PostgreSQL backend.
  * Zero hardcode, zero dead buttons, strict antislop adherence (no em-dashes, full SVG icons, WCAG AA).
  */
-export default function PlatformSettingsView({ user, token }) {
+export default function PlatformSettingsView({ user: _user, token }) {
   // Navigation: Sub-tabs
   const [activeTab, setActiveTab] = useState('general'); // 'general', 'pricing', 'email', 'payment', 'domain', 'seo'
 
@@ -69,6 +69,7 @@ export default function PlatformSettingsView({ user, token }) {
   const [paymentForm, setPaymentForm] = useState({
     active_gateway: 'midtrans',
     payment_test_mode: true,
+    midtrans_merchant_id: '',
     midtrans_server_key: '',
     midtrans_client_key: '',
     stripe_publishable_key: '',
@@ -95,6 +96,39 @@ export default function PlatformSettingsView({ user, token }) {
     last_updated_by: 'Super Administrator',
     updated_at: '',
   });
+
+  // Toggle visibility (fitur mata) untuk password & secret keys
+  const [showSecrets, setShowSecrets] = useState({
+    midtrans_server_key: false,
+    stripe_secret_key: false,
+    stripe_webhook_secret: false,
+    smtp_password: false,
+  });
+
+  const toggleSecretVisibility = async (field, formType = 'payment') => {
+    const nextState = !showSecrets[field];
+    setShowSecrets((prev) => ({ ...prev, [field]: nextState }));
+
+    // Jika user mengaktifkan mata dan nilainya masih ter-mask (••••••••), ambil nilai aslinya dari backend
+    const currentVal = formType === 'payment' ? paymentForm[field] : emailForm[field];
+    if (nextState && currentVal && (currentVal.includes('••') || currentVal.includes('*'))) {
+      try {
+        const res = await fetch(`${API_BASE}/admin/settings?reveal=true`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const json = await res.json();
+        if (json.success && json.data) {
+          if (formType === 'payment') {
+            setPaymentForm((prev) => ({ ...prev, [field]: json.data[field] || '' }));
+          } else if (formType === 'email') {
+            setEmailForm((prev) => ({ ...prev, [field]: json.data[field] || '' }));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to reveal secret:', err);
+      }
+    }
+  };
 
   const showFeedback = (type, message) => {
     setFeedback({ type, message });
@@ -144,6 +178,7 @@ export default function PlatformSettingsView({ user, token }) {
         setPaymentForm({
           active_gateway: d.active_gateway || 'midtrans',
           payment_test_mode: Boolean(d.payment_test_mode),
+          midtrans_merchant_id: d.midtrans_merchant_id || '',
           midtrans_server_key: d.midtrans_server_key || '',
           midtrans_client_key: d.midtrans_client_key || '',
           stripe_publishable_key: d.stripe_publishable_key || '',
@@ -854,13 +889,25 @@ export default function PlatformSettingsView({ user, token }) {
                   </label>
                   <div className="relative">
                     <input
-                      type="password"
+                      type={showSecrets.smtp_password ? 'text' : 'password'}
                       value={emailForm.smtp_password}
                       onChange={(e) => setEmailForm({ ...emailForm, smtp_password: e.target.value })}
                       placeholder="••••••••••••"
-                      className="w-full px-3.5 py-2 rounded-xl text-xs border border-slate-200 bg-white text-slate-900 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-hidden"
+                      className="w-full pl-3.5 pr-10 py-2 rounded-xl text-xs border border-slate-200 bg-white text-slate-900 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-hidden"
                     />
-                    <LockIcon className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
+                    <button
+                      type="button"
+                      onClick={() => toggleSecretVisibility('smtp_password', 'email')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-hidden cursor-pointer p-1 transition-colors"
+                      title={showSecrets.smtp_password ? 'Sembunyikan Password SMTP' : 'Lihat Password SMTP'}
+                      aria-label="Toggle SMTP Password visibility"
+                    >
+                      {showSecrets.smtp_password ? (
+                        <EyeOffIcon className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <EyeIcon className="w-3.5 h-3.5" />
+                      )}
+                    </button>
                   </div>
                 </div>
 
@@ -1000,20 +1047,25 @@ export default function PlatformSettingsView({ user, token }) {
 
             {/* Midtrans Config Section */}
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-4">
-              <span className="text-xs font-bold text-slate-800 block">
-                Kredensial API Midtrans
-              </span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800 block">
+                  Kredensial API Midtrans
+                </span>
+                <span className="text-[10px] text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-medium">
+                  Dynamic Setting
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    Midtrans Server Key
+                    Midtrans Merchant ID
                   </label>
                   <input
-                    type="password"
-                    value={paymentForm.midtrans_server_key}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, midtrans_server_key: e.target.value })}
-                    placeholder="SB-Mid-server-••••••••"
-                    className="w-full px-3 py-2 rounded-lg text-xs border border-slate-200 bg-white text-slate-900"
+                    type="text"
+                    value={paymentForm.midtrans_merchant_id}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, midtrans_merchant_id: e.target.value })}
+                    placeholder="Contoh: G123456789"
+                    className="w-full px-3 py-2 rounded-lg text-xs border border-slate-200 bg-white text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
                 <div>
@@ -1025,10 +1077,40 @@ export default function PlatformSettingsView({ user, token }) {
                     value={paymentForm.midtrans_client_key}
                     onChange={(e) => setPaymentForm({ ...paymentForm, midtrans_client_key: e.target.value })}
                     placeholder="SB-Mid-client-xxxx"
-                    className="w-full px-3 py-2 rounded-lg text-xs border border-slate-200 bg-white text-slate-900"
+                    className="w-full px-3 py-2 rounded-lg text-xs border border-slate-200 bg-white text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                    Midtrans Server Key
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showSecrets.midtrans_server_key ? 'text' : 'password'}
+                      value={paymentForm.midtrans_server_key}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, midtrans_server_key: e.target.value })}
+                      placeholder="SB-Mid-server-••••••••"
+                      className="w-full pl-3 pr-9 py-2 rounded-lg text-xs border border-slate-200 bg-white text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleSecretVisibility('midtrans_server_key', 'payment')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-hidden cursor-pointer p-1 transition-colors"
+                      title={showSecrets.midtrans_server_key ? 'Sembunyikan Server Key' : 'Lihat Server Key'}
+                      aria-label="Toggle Midtrans Server Key visibility"
+                    >
+                      {showSecrets.midtrans_server_key ? (
+                        <EyeOffIcon className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <EyeIcon className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
+              <p className="text-[11px] text-slate-500">
+                Kredensial disimpan aman di database platform secara dinamis. Anda dapat beralih antara Sandbox dan Live Production kapan saja tanpa perlu deploy ulang kode.
+              </p>
             </div>
 
             {/* Stripe Config Section */}
@@ -1046,32 +1128,62 @@ export default function PlatformSettingsView({ user, token }) {
                     value={paymentForm.stripe_publishable_key}
                     onChange={(e) => setPaymentForm({ ...paymentForm, stripe_publishable_key: e.target.value })}
                     placeholder="pk_test_xxxx"
-                    className="w-full px-3 py-2 rounded-lg text-xs border border-slate-200 bg-white text-slate-900"
+                    className="w-full px-3 py-2 rounded-lg text-xs border border-slate-200 bg-white text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                     Stripe Secret Key
                   </label>
-                  <input
-                    type="password"
-                    value={paymentForm.stripe_secret_key}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, stripe_secret_key: e.target.value })}
-                    placeholder="sk_test_••••••••"
-                    className="w-full px-3 py-2 rounded-lg text-xs border border-slate-200 bg-white text-slate-900"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showSecrets.stripe_secret_key ? 'text' : 'password'}
+                      value={paymentForm.stripe_secret_key}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, stripe_secret_key: e.target.value })}
+                      placeholder="sk_test_••••••••"
+                      className="w-full pl-3 pr-9 py-2 rounded-lg text-xs border border-slate-200 bg-white text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleSecretVisibility('stripe_secret_key', 'payment')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-hidden cursor-pointer p-1 transition-colors"
+                      title={showSecrets.stripe_secret_key ? 'Sembunyikan Secret Key' : 'Lihat Secret Key'}
+                      aria-label="Toggle Stripe Secret Key visibility"
+                    >
+                      {showSecrets.stripe_secret_key ? (
+                        <EyeOffIcon className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <EyeIcon className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                     Webhook Signing Secret
                   </label>
-                  <input
-                    type="password"
-                    value={paymentForm.stripe_webhook_secret}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, stripe_webhook_secret: e.target.value })}
-                    placeholder="whsec_••••••••"
-                    className="w-full px-3 py-2 rounded-lg text-xs border border-slate-200 bg-white text-slate-900"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showSecrets.stripe_webhook_secret ? 'text' : 'password'}
+                      value={paymentForm.stripe_webhook_secret}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, stripe_webhook_secret: e.target.value })}
+                      placeholder="whsec_••••••••"
+                      className="w-full pl-3 pr-9 py-2 rounded-lg text-xs border border-slate-200 bg-white text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleSecretVisibility('stripe_webhook_secret', 'payment')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-hidden cursor-pointer p-1 transition-colors"
+                      title={showSecrets.stripe_webhook_secret ? 'Sembunyikan Webhook Secret' : 'Lihat Webhook Secret'}
+                      aria-label="Toggle Webhook Secret visibility"
+                    >
+                      {showSecrets.stripe_webhook_secret ? (
+                        <EyeOffIcon className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <EyeIcon className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

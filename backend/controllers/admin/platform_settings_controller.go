@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"klikin-backend/middlewares"
+	"klikin-backend/models"
 	adminService "klikin-backend/services/admin"
 	"klikin-backend/views"
 )
@@ -34,6 +35,36 @@ func extractSettingsAdmin(r *http.Request) (string, string) {
 	return email, ip
 }
 
+func maskPlatformSettings(settings *models.PlatformSetting, reveal bool) models.PlatformSetting {
+	if settings == nil {
+		return models.PlatformSetting{}
+	}
+	masked := *settings
+	if !reveal {
+		if len(masked.SMTPPassword) > 4 {
+			masked.SMTPPassword = masked.SMTPPassword[:2] + "••••••••" + masked.SMTPPassword[len(masked.SMTPPassword)-2:]
+		} else if masked.SMTPPassword != "" {
+			masked.SMTPPassword = "••••••••"
+		}
+		if len(masked.MidtransServerKey) > 6 {
+			masked.MidtransServerKey = masked.MidtransServerKey[:4] + "••••••••"
+		} else if masked.MidtransServerKey != "" {
+			masked.MidtransServerKey = "••••••••"
+		}
+		if len(masked.StripeSecretKey) > 6 {
+			masked.StripeSecretKey = masked.StripeSecretKey[:4] + "••••••••"
+		} else if masked.StripeSecretKey != "" {
+			masked.StripeSecretKey = "••••••••"
+		}
+		if len(masked.StripeWebhookSecret) > 6 {
+			masked.StripeWebhookSecret = masked.StripeWebhookSecret[:4] + "••••••••"
+		} else if masked.StripeWebhookSecret != "" {
+			masked.StripeWebhookSecret = "••••••••"
+		}
+	}
+	return masked
+}
+
 // GetSettings retrieves current platform configuration
 func (c *PlatformSettingsController) GetSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := c.service.GetOrCreateSettings()
@@ -42,22 +73,8 @@ func (c *PlatformSettingsController) GetSettings(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// For security, mask sensitive credentials when sending to client
-	maskedSettings := *settings
-	if len(maskedSettings.SMTPPassword) > 4 {
-		maskedSettings.SMTPPassword = maskedSettings.SMTPPassword[:2] + "••••••••" + maskedSettings.SMTPPassword[len(maskedSettings.SMTPPassword)-2:]
-	}
-	if len(maskedSettings.MidtransServerKey) > 6 {
-		maskedSettings.MidtransServerKey = maskedSettings.MidtransServerKey[:4] + "••••••••"
-	}
-	if len(maskedSettings.StripeSecretKey) > 6 {
-		maskedSettings.StripeSecretKey = maskedSettings.StripeSecretKey[:4] + "••••••••"
-	}
-	if len(maskedSettings.StripeWebhookSecret) > 6 {
-		maskedSettings.StripeWebhookSecret = maskedSettings.StripeWebhookSecret[:4] + "••••••••"
-	}
-
-	views.RenderSuccess(w, http.StatusOK, "Pengaturan platform berhasil diambil", maskedSettings)
+	reveal := r.URL.Query().Get("reveal") == "true"
+	views.RenderSuccess(w, http.StatusOK, "Pengaturan platform berhasil diambil", maskPlatformSettings(settings, reveal))
 }
 
 // UpdateGeneral updates general and maintenance settings
@@ -75,7 +92,8 @@ func (c *PlatformSettingsController) UpdateGeneral(w http.ResponseWriter, r *htt
 		return
 	}
 
-	views.RenderSuccess(w, http.StatusOK, "Pengaturan umum berhasil diperbarui", updated)
+	middlewares.InvalidateSecurityCache()
+	views.RenderSuccess(w, http.StatusOK, "Pengaturan umum berhasil diperbarui", maskPlatformSettings(updated, false))
 }
 
 // UpdatePricing updates pricing, trial and tier limitations
@@ -93,7 +111,7 @@ func (c *PlatformSettingsController) UpdatePricing(w http.ResponseWriter, r *htt
 		return
 	}
 
-	views.RenderSuccess(w, http.StatusOK, "Paket & harga berhasil diperbarui", updated)
+	views.RenderSuccess(w, http.StatusOK, "Paket & harga berhasil diperbarui", maskPlatformSettings(updated, false))
 }
 
 // UpdateEmail updates SMTP configurations
@@ -111,7 +129,7 @@ func (c *PlatformSettingsController) UpdateEmail(w http.ResponseWriter, r *http.
 		return
 	}
 
-	views.RenderSuccess(w, http.StatusOK, "Konfigurasi SMTP berhasil diperbarui", updated)
+	views.RenderSuccess(w, http.StatusOK, "Konfigurasi SMTP berhasil diperbarui", maskPlatformSettings(updated, false))
 }
 
 // SendTestEmail sends a test email to verify SMTP
@@ -150,7 +168,7 @@ func (c *PlatformSettingsController) UpdatePayment(w http.ResponseWriter, r *htt
 		return
 	}
 
-	views.RenderSuccess(w, http.StatusOK, "Gateway pembayaran berhasil diperbarui", updated)
+	views.RenderSuccess(w, http.StatusOK, "Gateway pembayaran berhasil diperbarui", maskPlatformSettings(updated, false))
 }
 
 // UpdateDomain updates default domain and reserved subdomains
@@ -168,7 +186,7 @@ func (c *PlatformSettingsController) UpdateDomain(w http.ResponseWriter, r *http
 		return
 	}
 
-	views.RenderSuccess(w, http.StatusOK, "Domain & subdomain berhasil diperbarui", updated)
+	views.RenderSuccess(w, http.StatusOK, "Domain & subdomain berhasil diperbarui", maskPlatformSettings(updated, false))
 }
 
 // UpdateSEO updates default SEO metadata and robots.txt
@@ -186,5 +204,5 @@ func (c *PlatformSettingsController) UpdateSEO(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	views.RenderSuccess(w, http.StatusOK, "SEO & Crawler berhasil diperbarui", updated)
+	views.RenderSuccess(w, http.StatusOK, "SEO & Crawler berhasil diperbarui", maskPlatformSettings(updated, false))
 }

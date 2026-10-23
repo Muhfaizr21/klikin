@@ -77,7 +77,7 @@ export default function AvatarCropModal({ isOpen, onClose, onApplyAvatar, curren
         onApplyAvatar(cropped.dataUrl);
       }
       onClose();
-    } catch (err) {
+    } catch  {
       // Fallback
       onApplyAvatar(selectedImage);
       onClose();

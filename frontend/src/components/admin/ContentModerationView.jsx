@@ -121,7 +121,7 @@ export default function ContentModerationView({ token, onRefreshParent }) {
 
   // 2. Visitor Reports Queue State
   const [reports, setReports] = useState([]);
-  const [reportMeta, setReportMeta] = useState({
+  const [_reportMeta, setReportMeta] = useState({
     total_items: 0,
     current_page: 1,
     limit: 15,

@@ -296,8 +296,8 @@ klikin/
    # Database Supabase PostgreSQL
    DATABASE_URL="postgresql://user:password@host:5432/postgres?sslmode=require"
 
-   # Midtrans Gateway (Sandbox)
-   MIDTRANS_MERCHANT_ID="G284508566"
+   # Midtrans Gateway (Sandbox / Dynamic Platform Settings)
+   MIDTRANS_MERCHANT_ID="your_merchant_id"
    MIDTRANS_CLIENT_KEY="SB-Mid-client-xxxx"
    MIDTRANS_SERVER_KEY="SB-Mid-server-xxxx"
    MIDTRANS_IS_PRODUCTION=false

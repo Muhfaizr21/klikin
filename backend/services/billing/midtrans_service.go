@@ -25,67 +25,67 @@ type MidtransService struct {
 	clientKey    string
 	serverKey    string
 	isProduction bool
+	clientOrigin string
 	httpClient   *http.Client
 }
 
 func NewMidtransService(db *gorm.DB, cfg *config.Config) *MidtransService {
-	merchantID := cfg.MidtransMerchantID
-	if merchantID == "" {
-		merchantID = "G284508566"
-	}
-	clientKey := cfg.MidtransClientKey
-	if clientKey == "" {
-		clientKey = "SB-Mid-client-NLCyIuf2UU1OSpzD"
-	}
-	serverKey := cfg.MidtransServerKey
-	if serverKey == "" {
-		serverKey = "SB-Mid-server-dUkRH5CEcu0rXDYRhW-Zn_sv"
-	}
-
+	origin := strings.TrimRight(strings.TrimSpace(strings.Split(cfg.ClientOrigin, ",")[0]), "/")
 	return &MidtransService{
 		db:           db,
-		merchantID:   merchantID,
-		clientKey:    clientKey,
-		serverKey:    serverKey,
+		merchantID:   cfg.MidtransMerchantID,
+		clientKey:    cfg.MidtransClientKey,
+		serverKey:    cfg.MidtransServerKey,
 		isProduction: cfg.MidtransIsProduction,
+		clientOrigin: origin,
 		httpClient:   &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
-func (s *MidtransService) resolveCredentials() (clientKey string, serverKey string, isProd bool) {
+func (s *MidtransService) resolveCredentials() (merchantID string, clientKey string, serverKey string, isProd bool) {
+	merchantID = s.merchantID
 	clientKey = s.clientKey
 	serverKey = s.serverKey
 	isProd = s.isProduction
 
 	if s.db != nil {
 		var setting models.PlatformSetting
-		if err := s.db.Select("midtrans_client_key", "midtrans_server_key", "payment_test_mode").First(&setting).Error; err == nil {
-			if ck := strings.TrimSpace(setting.MidtransClientKey); ck != "" && ck != "SB-Mid-client-demo" && !strings.Contains(ck, "•") && !strings.Contains(ck, "*") {
+		if err := s.db.Select("midtrans_merchant_id", "midtrans_client_key", "midtrans_server_key", "payment_test_mode").First(&setting).Error; err == nil {
+			if mid := strings.TrimSpace(setting.MidtransMerchantID); mid != "" {
+				merchantID = mid
+			}
+			if ck := strings.TrimSpace(setting.MidtransClientKey); ck != "" && !strings.Contains(ck, "•") && !strings.Contains(ck, "*") {
 				clientKey = ck
 			}
-			if sk := strings.TrimSpace(setting.MidtransServerKey); sk != "" && sk != "SB-Mid-server-demo" && !strings.Contains(sk, "•") && !strings.Contains(sk, "*") {
+			if sk := strings.TrimSpace(setting.MidtransServerKey); sk != "" && !strings.Contains(sk, "•") && !strings.Contains(sk, "*") {
 				serverKey = sk
 			}
-			if !setting.PaymentTestMode {
-				isProd = true
-			}
+			isProd = !setting.PaymentTestMode
 		}
 	}
-	return clientKey, serverKey, isProd
+	return merchantID, clientKey, serverKey, isProd
 }
 
 func (s *MidtransService) GetClientKey() string {
-	ck, _, _ := s.resolveCredentials()
+	_, ck, _, _ := s.resolveCredentials()
 	return ck
 }
 
 func (s *MidtransService) IsProduction() bool {
-	_, _, isProd := s.resolveCredentials()
+	_, _, _, isProd := s.resolveCredentials()
 	return isProd
 }
 
 func (s *MidtransService) GetMerchantID() string {
-	return s.merchantID
+	mid, _, _, _ := s.resolveCredentials()
+	return mid
+}
+
+func (s *MidtransService) GetSnapJSURL() string {
+	if s.IsProduction() {
+		return "https://app.midtrans.com/snap/snap.js"
+	}
+	return "https://app.sandbox.midtrans.com/snap/snap.js"
 }
 
 // Snap API Endpoints
@@ -150,10 +150,11 @@ func (s *MidtransService) CreateSnapTransaction(orderID string, amount int64, cu
 		return "", "", errors.New("jumlah pembayaran harus lebih dari 0")
 	}
 
-	finishURL := fmt.Sprintf("%s/owner/billing", clientOrigin)
-	if finishURL == "/owner/billing" {
-		finishURL = "http://localhost:5173/owner/billing"
+	resolvedOrigin := strings.TrimRight(strings.TrimSpace(clientOrigin), "/")
+	if resolvedOrigin == "" {
+		resolvedOrigin = s.clientOrigin
 	}
+	finishURL := fmt.Sprintf("%s/owner/billing", resolvedOrigin)
 
 	reqPayload := SnapTransactionRequest{
 		TransactionDetails: SnapTransactionDetails{
@@ -192,7 +193,10 @@ func (s *MidtransService) CreateSnapTransaction(orderID string, amount int64, cu
 	}
 
 	// Basic Auth with ServerKey:
-	_, activeServerKey, _ := s.resolveCredentials()
+	_, _, activeServerKey, _ := s.resolveCredentials()
+	if activeServerKey == "" {
+		return "", "", errors.New("kredensial Midtrans Server Key belum diatur di Pengaturan Platform (Super Admin > Pengaturan Platform > Gateway Pembayaran)")
+	}
 	authHeader := "Basic " + base64.StdEncoding.EncodeToString([]byte(activeServerKey+":"))
 	req.Header.Set("Authorization", authHeader)
 	req.Header.Set("Content-Type", "application/json")
@@ -200,8 +204,10 @@ func (s *MidtransService) CreateSnapTransaction(orderID string, amount int64, cu
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
+		if s.IsProduction() || config.GetAppEnv() == "production" {
+			return "", "", fmt.Errorf("gagal menghubungi gateway pembayaran Midtrans: %w", err)
+		}
 		log.Printf("⚠️ Midtrans API network call error: %v. Fallback to mock token for dev environment.", err)
-		// Return graceful dev mock if network or sandbox is offline
 		mockToken := fmt.Sprintf("mock_snap_%d", time.Now().UnixNano())
 		mockRedirect := fmt.Sprintf("https://app.sandbox.midtrans.com/snap/v2/vtweb/%s", mockToken)
 		return mockToken, mockRedirect, nil
@@ -245,7 +251,10 @@ type MidtransNotificationPayload struct {
 
 // VerifySignature validates that notification is authentically from Midtrans
 func (s *MidtransService) VerifySignature(orderID, statusCode, grossAmount, signatureKey string) bool {
-	_, activeServerKey, _ := s.resolveCredentials()
+	_, _, activeServerKey, _ := s.resolveCredentials()
+	if activeServerKey == "" {
+		return false
+	}
 	raw := orderID + statusCode + grossAmount + activeServerKey
 	hasher := sha512.New()
 	hasher.Write([]byte(raw))
@@ -261,10 +270,12 @@ func (s *MidtransService) HandleNotification(payload MidtransNotificationPayload
 	}
 
 	// Enforce cryptographic SHA-512 signature validation on webhook notifications
-	if s.IsProduction() || (payload.SignatureKey != "" && payload.SignatureKey != "dev_simulated_signature") {
-		if !s.VerifySignature(payload.OrderID, payload.StatusCode, payload.GrossAmount, payload.SignatureKey) {
-			return errors.New("signature_key Midtrans tidak valid (akses ditolak)")
-		}
+	_, _, activeServerKey, _ := s.resolveCredentials()
+	if activeServerKey == "" {
+		return errors.New("kredensial Midtrans Server Key belum dikonfigurasi di Pengaturan Platform (akses webhook ditolak)")
+	}
+	if !s.VerifySignature(payload.OrderID, payload.StatusCode, payload.GrossAmount, payload.SignatureKey) {
+		return errors.New("signature_key Midtrans tidak valid (akses ditolak)")
 	}
 
 	var invoice models.Invoice
@@ -349,7 +360,10 @@ func (s *MidtransService) CheckStatus(orderID string) (string, error) {
 		return "", err
 	}
 
-	_, activeServerKey, _ := s.resolveCredentials()
+	_, _, activeServerKey, _ := s.resolveCredentials()
+	if activeServerKey == "" {
+		return "unknown", errors.New("kredensial Midtrans Server Key belum dikonfigurasi di Pengaturan Platform")
+	}
 	authHeader := "Basic " + base64.StdEncoding.EncodeToString([]byte(activeServerKey+":"))
 	req.Header.Set("Authorization", authHeader)
 	req.Header.Set("Accept", "application/json")
@@ -389,7 +403,10 @@ func (s *MidtransService) CancelTransaction(orderID string) error {
 		return err
 	}
 
-	_, activeServerKey, _ := s.resolveCredentials()
+	_, _, activeServerKey, _ := s.resolveCredentials()
+	if activeServerKey == "" {
+		return errors.New("kredensial Midtrans Server Key belum dikonfigurasi di Pengaturan Platform")
+	}
 	authHeader := "Basic " + base64.StdEncoding.EncodeToString([]byte(activeServerKey+":"))
 	req.Header.Set("Authorization", authHeader)
 	req.Header.Set("Content-Type", "application/json")

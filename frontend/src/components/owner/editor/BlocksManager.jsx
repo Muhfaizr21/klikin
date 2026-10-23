@@ -12,7 +12,6 @@ import {
   PlayCircleIcon,
   InstagramIcon,
   XIcon,
-  CheckIcon,
   PencilIcon,
   ShoppingBagIcon,
   MessageCircleIcon,
@@ -137,7 +136,7 @@ export default function BlocksManager({
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDragOver = (e, index) => {
+  const handleDragOver = (e, _index) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };

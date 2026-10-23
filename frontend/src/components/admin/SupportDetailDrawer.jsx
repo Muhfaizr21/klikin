@@ -1,12 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { API_BASE } from '../../lib/api';
 import {
   XIcon,
-  MessageCircleIcon,
   CheckCircleIcon,
   AlertCircleIcon,
-  ClockIcon,
-  CheckIcon,
   ExternalLinkIcon,
 } from '../Icons';
 
@@ -37,7 +34,7 @@ export default function SupportDetailDrawer({
   const [selectedCannedId, setSelectedCannedId] = useState('');
 
   // Fetch ticket details
-  const fetchDetail = async () => {
+  const fetchDetail = useCallback(async () => {
     if (!ticketId) return;
     setLoading(true);
     setError(null);
@@ -57,10 +54,10 @@ export default function SupportDetailDrawer({
     } finally {
       setLoading(false);
     }
-  };
+  }, [ticketId, token]);
 
   // Fetch canned responses
-  const fetchCanned = async () => {
+  const fetchCanned = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/admin/support/canned-responses`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -72,7 +69,7 @@ export default function SupportDetailDrawer({
     } catch {
       // Canned fetch optional
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     if (isOpen && ticketId) {
@@ -83,7 +80,7 @@ export default function SupportDetailDrawer({
       setReplyFeedback(null);
       setSelectedCannedId('');
     }
-  }, [isOpen, ticketId]);
+  }, [isOpen, ticketId, fetchDetail, fetchCanned]);
 
   // Handle Escape key to close
   useEffect(() => {

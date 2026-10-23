@@ -31,7 +31,6 @@ export default function DesktopPreviewFrame({ page, blocks = [] }) {
     button_radius = 'rounded-xl',
     button_shadow = 'shadow-xs',
     block_spacing = 'normal',
-    page_shadow = 'none',
     bg_image_url = '',
     custom_css = '',
     slug = 'kopiseduh',

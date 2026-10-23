@@ -9,6 +9,7 @@ import (
 
 	"gorm.io/gorm"
 	"klikin-backend/models"
+	authSvc "klikin-backend/services/auth"
 )
 
 type AccountService struct {
@@ -161,7 +162,7 @@ func (s *AccountService) ChangePassword(userID string, dto ChangePasswordDTO) er
 	return s.db.Save(&user).Error
 }
 
-// Toggle2FA switches Two-Factor Authentication state
+// Toggle2FA switches Two-Factor Authentication state and generates cryptographic keys
 func (s *AccountService) Toggle2FA(userID string, dto Toggle2FADTO) (map[string]interface{}, error) {
 	if s.db == nil {
 		return nil, errors.New("database connection is unavailable")
@@ -174,26 +175,28 @@ func (s *AccountService) Toggle2FA(userID string, dto Toggle2FADTO) (map[string]
 
 	user.TwoFactorEnabled = dto.Enabled
 	user.UpdatedAt = time.Now()
+
+	var backupCodes []string
+	if dto.Enabled {
+		if user.TwoFactorSecret == "" {
+			user.TwoFactorSecret = authSvc.GenerateRandomBase32Secret()
+		}
+		backupCodes = authSvc.GenerateBackupCodes()
+		user.TwoFactorBackupCodes = strings.Join(backupCodes, ",")
+	}
+
 	if err := s.db.Save(&user).Error; err != nil {
 		return nil, err
 	}
 
-	backupCodes := []string{
-		"KLIK-8921-X9A2",
-		"KLIK-4109-M7C4",
-		"KLIK-9923-L2P8",
-		"KLIK-5510-K4Q1",
-		"KLIK-3329-T8R6",
-		"KLIK-7741-W5V3",
-		"KLIK-6628-Y1E7",
-		"KLIK-1194-Z3B9",
-	}
+	otpauthURL := fmt.Sprintf("otpauth://totp/Klikin:%s?secret=%s&issuer=Klikin", user.Email, user.TwoFactorSecret)
 
 	return map[string]interface{}{
 		"enabled":      user.TwoFactorEnabled,
 		"backup_codes": backupCodes,
-		"secret_key":   "JBSWY3DPEHPK3PXP",
-		"issuer":       "Klikin Platform",
+		"secret_key":   user.TwoFactorSecret,
+		"otpauth_url":  otpauthURL,
+		"issuer":       "Klikin",
 	}, nil
 }
 

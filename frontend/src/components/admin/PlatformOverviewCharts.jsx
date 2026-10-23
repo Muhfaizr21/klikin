@@ -4,11 +4,14 @@ import {
   MonitorIcon,
 } from '../Icons';
 
-export default function PlatformOverviewCharts() {
-  const [activeHourIndex, setActiveHourIndex] = useState(19); // Jam puncak default 19:00
-
+export default function PlatformOverviewCharts({
+  hourlyTraffic: propHourly,
+  trafficChannels: propChannels,
+  topCities: propCities,
+  creatorSegments: propSegments,
+}) {
   // Dataset aktivitas trafik 24 jam (00:00 - 23:00)
-  const hourlyTraffic = [
+  const defaultHourlyTraffic = [
     { hour: '00', clicks: 1200, label: '00:00' },
     { hour: '01', clicks: 800, label: '01:00' },
     { hour: '02', clicks: 450, label: '02:00' },
@@ -35,32 +38,39 @@ export default function PlatformOverviewCharts() {
     { hour: '23', clicks: 5200, label: '23:00' },
   ];
 
-  const maxClick = Math.max(...hourlyTraffic.map((d) => d.clicks));
+  const hourlyTraffic = (propHourly && propHourly.length > 0) ? propHourly : defaultHourlyTraffic;
+  const initialPeakIdx = Math.max(0, hourlyTraffic.findIndex((h) => h.isPeak));
+  const [activeHourIndex, setActiveHourIndex] = useState(initialPeakIdx >= 0 ? initialPeakIdx : 19);
+
+  const maxClick = Math.max(...hourlyTraffic.map((d) => d.clicks || 0), 1);
 
   // Kanal rujukan trafik
-  const trafficChannels = [
+  const defaultTrafficChannels = [
     { name: 'Instagram Bio & Story', share: '52%', barWidth: '52%', color: 'bg-gradient-to-r from-purple-500 to-indigo-600', visitors: '74,2 rb' },
     { name: 'TikTok Showcase Link', share: '29%', barWidth: '29%', color: 'bg-slate-900', visitors: '41,4 rb' },
     { name: 'WhatsApp Direct Share', share: '13%', barWidth: '13%', color: 'bg-emerald-500', visitors: '18,6 rb' },
     { name: 'Pencarian & Referal Langsung', share: '6%', barWidth: '6%', color: 'bg-indigo-300', visitors: '8,5 rb' },
   ];
+  const trafficChannels = (propChannels && propChannels.length > 0) ? propChannels : defaultTrafficChannels;
 
   // Wilayah asal pengunjung terbanyak
-  const topCities = [
+  const defaultTopCities = [
     { city: 'Jabodetabek', share: '42%' },
     { city: 'Surabaya', share: '21%' },
     { city: 'Bandung', share: '16%' },
     { city: 'Medan', share: '12%' },
     { city: 'Bali & Lainnya', share: '9%' },
   ];
+  const topCities = (propCities && propCities.length > 0) ? propCities : defaultTopCities;
 
   // Sektor industri tenant & kreator
-  const creatorSegments = [
+  const defaultCreatorSegments = [
     { sector: 'Kuliner & F&B', count: '142 tenant', share: '34%', color: 'border-amber-200 bg-amber-50/50 text-amber-900' },
     { sector: 'Fashion & Mode', count: '118 tenant', share: '28%', color: 'border-purple-200 bg-purple-50/50 text-purple-900' },
     { sector: 'Personal Brand & Edukasi', count: '92 tenant', share: '22%', color: 'border-indigo-200 bg-indigo-50/50 text-indigo-900' },
     { sector: 'Jasa & Agensi', count: '67 tenant', share: '16%', color: 'border-emerald-200 bg-emerald-50/50 text-emerald-900' },
   ];
+  const creatorSegments = (propSegments && propSegments.length > 0) ? propSegments : defaultCreatorSegments;
 
   // Tipe interaksi klik audiens
   const interactionTypes = [

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
 import AdminMetricCards from './AdminMetricCards';
@@ -31,20 +31,8 @@ function AdminViewLoader() {
   );
 }
 import {
-  GlobeIcon,
-  CreditCardIcon,
-  BarChartIcon,
   CheckCircleIcon,
   AlertCircleIcon,
-  ShieldAlertIcon,
-  TrendingUpIcon,
-  MessageCircleIcon,
-  LockIcon,
-  UsersIcon,
-  TrashIcon,
-  ExternalLinkIcon,
-  SettingsIcon,
-  SparklesIcon,
 } from '../Icons';
 
 /**
@@ -63,15 +51,16 @@ import {
  * 3.10 Audit & Keamanan
  */
 export default function SuperAdminDashboard({
-  user,
+  user: _user,
   token,
   onLogout,
-  onBackToHome,
+  onBackToHome: _onBackToHome,
   initialTab = 'overview',
 }) {
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [overviewData, setOverviewData] = useState(null);
+  const [_loading, setLoading] = useState(true);
 
   const resolveAdminTab = (tab) => {
     if (!tab || tab === 'dashboard' || tab === 'index') return 'overview';
@@ -86,33 +75,37 @@ export default function SuperAdminDashboard({
   // Sync activeTab when initialTab prop updates from URL
   useEffect(() => {
     const resolved = resolveAdminTab(initialTab);
-    if (resolved && resolved !== activeTab) {
-      setActiveTab(resolved);
+    if (resolved) {
+      setActiveTab((prev) => (resolved !== prev ? resolved : prev));
     }
   }, [initialTab]);
 
-  useEffect(() => {
-    fetchAdminData();
-  }, [user]);
+  const fetchAdminData = useCallback(async () => {
+    const activeToken = token || localStorage.getItem('klikin_token');
+    if (!activeToken) return;
 
-  const fetchAdminData = async () => {
     setLoading(true);
     setFeedback(null);
     try {
-      const [statsRes, usersRes] = await Promise.all([
+      const [statsRes, usersRes, overviewRes] = await Promise.all([
         fetch(`${API_BASE}/admin/stats`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${activeToken}` },
         }),
         fetch(`${API_BASE}/admin/users`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${activeToken}` },
+        }),
+        fetch(`${API_BASE}/admin/overview`, {
+          headers: { Authorization: `Bearer ${activeToken}` },
         }),
       ]);
 
       const statsData = await statsRes.json();
       const usersData = await usersRes.json();
+      const overviewJson = await overviewRes.json();
 
       if (statsData.success) setStats(statsData.data);
       if (usersData.success) setUsers(usersData.data?.users || (Array.isArray(usersData.data) ? usersData.data : []));
+      if (overviewJson.success) setOverviewData(overviewJson.data);
     } catch (err) {
       setFeedback({
         type: 'error',
@@ -121,7 +114,11 @@ export default function SuperAdminDashboard({
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    fetchAdminData();
+  }, [fetchAdminData]);
 
   const handleSelectTab = (tabId) => {
     setActiveTab(tabId);
@@ -195,14 +192,19 @@ export default function SuperAdminDashboard({
             {/* Middle Section: Revenue by category (7 cols) + Provider utilisation (5 cols) */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
               <div className="lg:col-span-7">
-                <RevenueByCategoryCard />
+                <RevenueByCategoryCard
+                  categories={overviewData?.revenue_categories}
+                  summaryNote={overviewData?.revenue_summary}
+                />
               </div>
               <div className="lg:col-span-5">
                 <TopTenantPerformanceCard
+                  tenants={overviewData?.top_tenants}
+                  recommendationHint={overviewData?.recommendation}
                   onActionClick={() => {
                     setFeedback({
                       type: 'success',
-                      message: 'Rekomendasi optimasi slot telah disimulasikan pada tenant.',
+                      message: 'Rekomendasi optimasi domain/slot telah disimulasikan pada tenant.',
                     });
                     setTimeout(() => setFeedback(null), 3500);
                   }}
@@ -213,10 +215,16 @@ export default function SuperAdminDashboard({
             {/* Bottom Section: Journey conversion funnel (7 cols) + Cohort Retention Heatmap (5 cols) */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
               <div className="lg:col-span-7">
-                <JourneyConversionCard />
+                <JourneyConversionCard
+                  stages={overviewData?.funnel_stages}
+                  dropoffAlert={overviewData?.funnel_dropoff}
+                />
               </div>
               <div className="lg:col-span-5">
-                <CohortRetentionCard />
+                <CohortRetentionCard
+                  cohorts={overviewData?.cohorts}
+                  months={overviewData?.cohort_months}
+                />
               </div>
             </div>
 
@@ -235,7 +243,12 @@ export default function SuperAdminDashboard({
                   Data Realtime • 24 Jam Terakhir
                 </span>
               </div>
-              <PlatformOverviewCharts />
+              <PlatformOverviewCharts
+                hourlyTraffic={overviewData?.hourly_traffic}
+                trafficChannels={overviewData?.traffic_channels}
+                topCities={overviewData?.top_cities}
+                creatorSegments={overviewData?.creator_segments}
+              />
             </div>
           </div>
         )}

@@ -11,7 +11,6 @@ import {
   EyeIcon,
   DownloadIcon,
   RefreshCwIcon,
-  FilterIcon,
   UsersIcon,
   SparklesIcon,
   MoreHorizontalIcon,
@@ -19,7 +18,6 @@ import {
   CheckIcon,
   ChevronRightIcon,
   ArrowLeftIcon,
-  LayersIcon,
 } from '../Icons';
 import UserDetailDrawer from './UserDetailDrawer';
 import {
@@ -144,7 +142,7 @@ export default function UserDirectoryTable({ token, onRefresh: onParentRefresh }
 
       setFeedback({ type: 'success', text: data.message });
       fetchUsers();
-      onParentRefresh && onParentRefresh();
+      onParentRefresh?.();
       setTimeout(() => setFeedback(null), 3500);
     } catch (err) {
       setFeedback({ type: 'error', text: err.message });
@@ -166,7 +164,7 @@ export default function UserDirectoryTable({ token, onRefresh: onParentRefresh }
 
       setFeedback({ type: 'success', text: `Akun @${user.username} berhasil diaktifkan kembali.` });
       fetchUsers();
-      onParentRefresh && onParentRefresh();
+      onParentRefresh?.();
       setTimeout(() => setFeedback(null), 3500);
     } catch (err) {
       setFeedback({ type: 'error', text: err.message });
@@ -188,7 +186,7 @@ export default function UserDirectoryTable({ token, onRefresh: onParentRefresh }
 
       setFeedback({ type: 'success', text: `Status blokir @${user.username} telah dicabut.` });
       fetchUsers();
-      onParentRefresh && onParentRefresh();
+      onParentRefresh?.();
       setTimeout(() => setFeedback(null), 3500);
     } catch (err) {
       setFeedback({ type: 'error', text: err.message });
@@ -356,7 +354,7 @@ export default function UserDirectoryTable({ token, onRefresh: onParentRefresh }
               type="button"
               onClick={() => {
                 fetchUsers();
-                onParentRefresh && onParentRefresh();
+                onParentRefresh?.();
               }}
               title="Segarkan data direktori"
               className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-all shadow-2xs cursor-pointer"
@@ -861,7 +859,7 @@ export default function UserDirectoryTable({ token, onRefresh: onParentRefresh }
         onToggleVerification={(u) => handleToggleVerification(u)}
         onRefreshParent={() => {
           fetchUsers();
-          onParentRefresh && onParentRefresh();
+          onParentRefresh?.();
         }}
       />
 
@@ -874,7 +872,7 @@ export default function UserDirectoryTable({ token, onRefresh: onParentRefresh }
         onSuccess={(msg) => {
           setFeedback({ type: 'success', text: msg });
           fetchUsers();
-          onParentRefresh && onParentRefresh();
+          onParentRefresh?.();
           setTimeout(() => setFeedback(null), 3500);
         }}
       />
@@ -888,7 +886,7 @@ export default function UserDirectoryTable({ token, onRefresh: onParentRefresh }
         onSuccess={(msg) => {
           setFeedback({ type: 'success', text: msg });
           fetchUsers();
-          onParentRefresh && onParentRefresh();
+          onParentRefresh?.();
           setTimeout(() => setFeedback(null), 3500);
         }}
       />
@@ -902,7 +900,7 @@ export default function UserDirectoryTable({ token, onRefresh: onParentRefresh }
         onSuccess={(msg) => {
           setFeedback({ type: 'success', text: msg });
           fetchUsers();
-          onParentRefresh && onParentRefresh();
+          onParentRefresh?.();
           setTimeout(() => setFeedback(null), 3500);
         }}
       />
@@ -916,7 +914,7 @@ export default function UserDirectoryTable({ token, onRefresh: onParentRefresh }
         onSuccess={(msg) => {
           setFeedback({ type: 'success', text: msg });
           fetchUsers();
-          onParentRefresh && onParentRefresh();
+          onParentRefresh?.();
           setTimeout(() => setFeedback(null), 3500);
         }}
       />

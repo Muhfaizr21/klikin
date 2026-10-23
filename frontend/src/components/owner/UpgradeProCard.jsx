@@ -1,5 +1,5 @@
 import React from 'react';
-import { SparklesIcon, CheckIcon } from '../Icons';
+import { SparklesIcon } from '../Icons';
 
 export default function UpgradeProCard({ onUpgrade, isPro = false }) {
   if (isPro) {

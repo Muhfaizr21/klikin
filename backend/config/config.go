@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -53,11 +54,14 @@ func LoadConfig() *Config {
 		clientOrigin = "http://localhost:5173"
 	}
 
-	jwtSecret := os.Getenv("JWT_SECRET")
+	jwtSecret := strings.TrimSpace(os.Getenv("JWT_SECRET"))
 	if jwtSecret != "" {
+		if len(jwtSecret) < 32 && appEnv == "production" {
+			log.Fatalf("FATAL SECURITY ERROR: JWT_SECRET must be at least 32 characters long in production (current length: %d)", len(jwtSecret))
+		}
 		SetJWTSecret(jwtSecret)
 	} else if appEnv == "production" {
-		log.Println("⚠️  WARNING: JWT_SECRET environment variable is not set in production mode!")
+		log.Fatalf("FATAL SECURITY ERROR: JWT_SECRET environment variable is mandatory in production!")
 	}
 
 	databaseURL := os.Getenv("DATABASE_URL")
@@ -66,18 +70,9 @@ func LoadConfig() *Config {
 	supabaseSecretKey := os.Getenv("SUPABASE_SECRET_KEY")
 	supabaseJWKSURL := os.Getenv("SUPABASE_JWKS_URL")
 
-	midtransMerchantID := os.Getenv("MIDTRANS_MERCHANT_ID")
-	if midtransMerchantID == "" {
-		midtransMerchantID = "G284508566"
-	}
-	midtransClientKey := os.Getenv("MIDTRANS_CLIENT_KEY")
-	if midtransClientKey == "" {
-		midtransClientKey = "SB-Mid-client-NLCyIuf2UU1OSpzD"
-	}
-	midtransServerKey := os.Getenv("MIDTRANS_SERVER_KEY")
-	if midtransServerKey == "" {
-		midtransServerKey = "SB-Mid-server-dUkRH5CEcu0rXDYRhW-Zn_sv"
-	}
+	midtransMerchantID := strings.TrimSpace(os.Getenv("MIDTRANS_MERCHANT_ID"))
+	midtransClientKey := strings.TrimSpace(os.Getenv("MIDTRANS_CLIENT_KEY"))
+	midtransServerKey := strings.TrimSpace(os.Getenv("MIDTRANS_SERVER_KEY"))
 	midtransIsProd := os.Getenv("MIDTRANS_IS_PRODUCTION") == "true"
 
 	return &Config{

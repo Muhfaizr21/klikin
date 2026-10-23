@@ -2,10 +2,12 @@ package page
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"klikin-backend/models"
 )
@@ -153,6 +155,7 @@ func (s *PageSettingsService) UpdateSlug(userID string, newSlug string) (string,
 		"updated_at": now,
 	})
 
+	InvalidatePublicPageCache()
 	return cleanSlug, nil
 }
 
@@ -169,11 +172,15 @@ func (s *PageSettingsService) UpdateVisibility(userID string, visibility string)
 
 	isPublished := cleanVis == "public"
 
-	return s.db.Model(&models.BioPage{}).Where("user_id = ?", userID).Updates(map[string]interface{}{
+	err := s.db.Model(&models.BioPage{}).Where("user_id = ?", userID).Updates(map[string]interface{}{
 		"visibility":   cleanVis,
 		"is_published": isPublished,
 		"updated_at":   time.Now(),
 	}).Error
+	if err == nil {
+		InvalidatePublicPageCache()
+	}
+	return err
 }
 
 // UpdatePassword sets or disables page protection (Requires Pro)
@@ -202,12 +209,20 @@ func (s *PageSettingsService) UpdatePassword(userID string, isProtected bool, pa
 	}
 
 	if isProtected {
-		updates["page_password"] = cleanPassword
+		hashed, err := bcrypt.GenerateFromPassword([]byte(cleanPassword), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("gagal mengenkripsi kata sandi halaman: %w", err)
+		}
+		updates["page_password"] = string(hashed)
 	} else {
 		updates["page_password"] = ""
 	}
 
-	return s.db.Model(&models.BioPage{}).Where("user_id = ?", userID).Updates(updates).Error
+	err := s.db.Model(&models.BioPage{}).Where("user_id = ?", userID).Updates(updates).Error
+	if err == nil {
+		InvalidatePublicPageCache()
+	}
+	return err
 }
 
 // UpdateCustom404 sets 404 fallback URL

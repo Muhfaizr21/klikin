@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   ShoppingBagIcon,
   PlayCircleIcon,
@@ -20,6 +20,33 @@ import {
   ShieldAlertIcon,
 } from './Icons';
 import { API_BASE } from '../lib/api';
+
+// SEC-06: Defensively sanitize URL protocols to prevent XSS via javascript: or data: URIs
+const getSafeUrl = (rawUrl) => {
+  if (!rawUrl) return '#';
+  const trimmed = String(rawUrl).trim();
+  if (trimmed === '' || trimmed === '#') return '#';
+  const lower = trimmed.toLowerCase();
+  if (
+    lower.startsWith('javascript:') ||
+    lower.startsWith('data:') ||
+    lower.startsWith('vbscript:') ||
+    lower.startsWith('file:') ||
+    lower.startsWith('blob:')
+  ) {
+    return '#';
+  }
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('mailto:') ||
+    trimmed.startsWith('tel:') ||
+    trimmed.startsWith('whatsapp:')
+  ) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+};
 
 export default function PublicBioPage({ slug, onBackToHome }) {
   const [page, setPage] = useState(null);
@@ -48,11 +75,7 @@ export default function PublicBioPage({ slug, onBackToHome }) {
   const [reportSuccess, setReportSuccess] = useState(null);
   const [reportError, setReportError] = useState(null);
 
-  useEffect(() => {
-    fetchPublicPage();
-  }, [slug]);
-
-  const fetchPublicPage = async () => {
+  const fetchPublicPage = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -78,7 +101,11 @@ export default function PublicBioPage({ slug, onBackToHome }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [slug]);
+
+  useEffect(() => {
+    fetchPublicPage();
+  }, [fetchPublicPage]);
 
   const handleTrackClick = (targetTitle, targetUrl, blockId) => {
     if (!page) return;
@@ -278,7 +305,6 @@ export default function PublicBioPage({ slug, onBackToHome }) {
     button_radius = 'rounded-xl',
     button_shadow = 'shadow-xs',
     block_spacing = 'normal',
-    page_shadow = 'none',
     bg_image_url = '',
     custom_css = '',
     blocks = [],
@@ -377,7 +403,7 @@ export default function PublicBioPage({ slug, onBackToHome }) {
       className={`min-h-screen w-full flex flex-col items-center justify-between p-4 sm:p-8 ${getFontClass()} klikin-page transition-colors duration-200`}
       style={{
         background: bg_image_url
-          ? `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url('${bg_image_url}') center/cover fixed no-repeat`
+          ? `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url('${getSafeUrl(bg_image_url).replace(/['"()\\]/g, '')}') center/cover fixed no-repeat`
           : background_color || '#ffffff',
       }}
     >
@@ -465,7 +491,7 @@ export default function PublicBioPage({ slug, onBackToHome }) {
                 return (
                   <a
                     key={block.id}
-                    href={block.url || '#'}
+                    href={getSafeUrl(block.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => handleTrackClick(block.title, block.url, block.id)}
@@ -571,7 +597,7 @@ export default function PublicBioPage({ slug, onBackToHome }) {
                       {socials.map((s, idx) => (
                         <a
                           key={idx}
-                          href={s.url || '#'}
+                          href={getSafeUrl(s.url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={() => handleTrackClick(s.platform, s.url, block.id)}
@@ -595,7 +621,7 @@ export default function PublicBioPage({ slug, onBackToHome }) {
                       <PlayCircleIcon className="w-8 h-8 mb-2 text-white/80" />
                       <span className="text-xs font-bold line-clamp-1">{block.title}</span>
                       <a
-                        href={block.url}
+                        href={getSafeUrl(block.url)}
                         target="_blank"
                         rel="noreferrer"
                         className="text-[10px] text-sky-400 font-mono mt-1 hover:underline truncate max-w-full"

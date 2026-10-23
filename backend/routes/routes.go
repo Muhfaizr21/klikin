@@ -48,6 +48,7 @@ func SetupRoutes(cfg *config.Config) http.Handler {
 	billingService := billingSvc.NewBillingService(config.DB, midtransService)
 	billingService.StartInvoiceExpirationSweeper()
 	pageSettingsService := pageSvc.NewPageSettingsService(config.DB)
+	publicPageService := pageSvc.NewPublicPageService(config.DB)
 	notificationService := notificationSvc.NewNotificationService(config.DB)
 	supportService := supportSvc.NewSupportService(config.DB)
 
@@ -66,7 +67,7 @@ func SetupRoutes(cfg *config.Config) http.Handler {
 	platformSettingsController := adminCtrl.NewPlatformSettingsController(platformSettingsService)
 	ownerController := ownerCtrl.NewOwnerController(ownerService)
 	analyticsController := ownerCtrl.NewAnalyticsController(analyticsService)
-	publicPageController := publicCtrl.NewPageController()
+	publicPageController := publicCtrl.NewPageController(publicPageService)
 	trackController := publicCtrl.NewTrackController(analyticsService)
 	healthController := publicCtrl.NewHealthController(cfg)
 	domainController := ownerCtrl.NewDomainController(domainService)
@@ -89,9 +90,11 @@ func SetupRoutes(cfg *config.Config) http.Handler {
 	// --- 4. AUTHENTICATION ENDPOINTS ---
 	mux.HandleFunc("POST /api/auth/register", authController.Register)
 	mux.HandleFunc("POST /api/auth/login", authController.Login)
+	mux.HandleFunc("POST /api/auth/2fa/verify", authController.Verify2FA)
 	mux.HandleFunc("GET /api/auth/me", middlewares.RequireAuth(authController.GetMe))
 
 	// --- 5. SUPER ADMIN ENDPOINTS (Role: SUPER_ADMIN only) ---
+	mux.HandleFunc("GET /api/admin/overview", middlewares.RequireRole(models.RoleSuperAdmin, adminController.GetOverview))
 	mux.HandleFunc("GET /api/admin/stats", middlewares.RequireRole(models.RoleSuperAdmin, adminController.GetStats))
 	mux.HandleFunc("GET /api/admin/users", middlewares.RequireRole(models.RoleSuperAdmin, userManagementController.ListUsers))
 	mux.HandleFunc("GET /api/admin/users/export", middlewares.RequireRole(models.RoleSuperAdmin, userManagementController.ExportCSV))
@@ -296,8 +299,11 @@ func SetupRoutes(cfg *config.Config) http.Handler {
 	mux.HandleFunc("GET /api/user/export", middlewares.RequireAuth(accountController.ExportData))
 	mux.HandleFunc("DELETE /api/user/account", middlewares.RequireAuth(accountController.DeleteAccount))
 
-	// Apply Middlewares (Logger, CORS)
+	// Apply Global Defense-in-Depth Middlewares (SEC-05 & SEC-10)
+	// Logger -> SecurityHeaders -> RateLimit -> CORS -> Mux Handler
 	handler := middlewares.Logger(mux)
+	handler = middlewares.RateLimit(handler)
+	handler = middlewares.SecurityHeaders(handler)
 	handler = middlewares.EnableCORS(cfg.ClientOrigin)(handler)
 
 	return handler

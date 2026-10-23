@@ -26,13 +26,14 @@ func (c *AdminController) GetStats(w http.ResponseWriter, r *http.Request) {
 	views.RenderSuccess(w, http.StatusOK, "Statistik platform berhasil diambil", stats)
 }
 
-// GetUsers returns the full list of platform accounts for SuperAdmin
-func (c *AdminController) GetUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := c.service.ListUsers()
+// GetOverview returns comprehensive platform overview intelligence including revenue breakdown, top tenants, funnel, cohorts, and hourly traffic
+func (c *AdminController) GetOverview(w http.ResponseWriter, r *http.Request) {
+	overview, err := c.service.GetOverview()
 	if err != nil {
-		views.RenderError(w, http.StatusInternalServerError, "Gagal memuat daftar pengguna: "+err.Error())
+		views.RenderError(w, http.StatusInternalServerError, "Gagal memuat ringkasan platform: "+err.Error())
 		return
 	}
 
-	views.RenderSuccess(w, http.StatusOK, "Daftar seluruh pengguna platform", users)
+	views.RenderSuccess(w, http.StatusOK, "Ringkasan analitik platform berhasil dimuat", overview)
 }
+

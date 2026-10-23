@@ -17,7 +17,7 @@ import {
   CheckIcon,
 } from '../../Icons';
 
-export const AVAILABLE_PLATFORMS = [
+const AVAILABLE_PLATFORMS = [
   {
     id: 'instagram',
     name: 'Instagram',
@@ -103,7 +103,7 @@ export const AVAILABLE_PLATFORMS = [
 /**
  * Intelligent URL normalizer for any social media platform
  */
-export function normalizeSocialUrl(platform, input) {
+function normalizeSocialUrl(platform, input) {
   if (!input) return '';
   let str = input.trim();
 
@@ -197,7 +197,6 @@ export default function SocialsBuilder({ settings, onChangeSettings }) {
 
   // Add platform to list
   const handleAddPlatform = (platformId) => {
-    const platformDef = AVAILABLE_PLATFORMS.find((p) => p.id === platformId);
     const newItem = {
       platform: platformId,
       url: '',

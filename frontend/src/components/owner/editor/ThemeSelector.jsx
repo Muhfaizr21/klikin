@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { THEMES, FONT_OPTIONS, RADIUS_OPTIONS, SHADOW_OPTIONS } from './themes';
-import { PaletteIcon, CheckIcon } from '../../Icons';
+import { CheckIcon } from '../../Icons';
 import { navigateTo } from '../../../utils/navigation';
 
 const COLOR_PRESETS = [

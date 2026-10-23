@@ -403,7 +403,7 @@ export function AuditDetailModal({ isOpen, onClose, auditLog }) {
     if (auditLog.details_json) {
       parsedDetails = JSON.parse(auditLog.details_json);
     }
-  } catch (e) {
+  } catch  {
     parsedDetails = auditLog.details_json;
   }
 

@@ -46,11 +46,12 @@ type PlatformSetting struct {
 	// 4. Pembayaran (Midtrans & Stripe)
 	ActiveGateway          string `gorm:"size:50;default:'midtrans'" json:"active_gateway"`
 	PaymentTestMode        bool   `gorm:"default:true" json:"payment_test_mode"`
-	MidtransServerKey      string `gorm:"size:255;default:'SB-Mid-server-demo'" json:"midtrans_server_key"`
-	MidtransClientKey      string `gorm:"size:255;default:'SB-Mid-client-demo'" json:"midtrans_client_key"`
-	StripePublishableKey   string `gorm:"size:255;default:'pk_test_demo'" json:"stripe_publishable_key"`
-	StripeSecretKey        string `gorm:"size:255;default:'sk_test_demo'" json:"stripe_secret_key"`
-	StripeWebhookSecret    string `gorm:"size:255;default:'whsec_demo'" json:"stripe_webhook_secret"`
+	MidtransMerchantID     string `gorm:"size:100;default:''" json:"midtrans_merchant_id"`
+	MidtransServerKey      string `gorm:"size:255;default:''" json:"midtrans_server_key"`
+	MidtransClientKey      string `gorm:"size:255;default:''" json:"midtrans_client_key"`
+	StripePublishableKey   string `gorm:"size:255;default:''" json:"stripe_publishable_key"`
+	StripeSecretKey        string `gorm:"size:255;default:''" json:"stripe_secret_key"`
+	StripeWebhookSecret    string `gorm:"size:255;default:''" json:"stripe_webhook_secret"`
 
 	// 5. Domain & Subdomain
 	DefaultSubdomainRoot   string `gorm:"size:100;default:'klikin.id'" json:"default_subdomain_root"`

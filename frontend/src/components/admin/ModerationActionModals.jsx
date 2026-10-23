@@ -3,7 +3,6 @@ import { API_BASE } from '../../lib/api';
 import {
   XIcon,
   ShieldAlertIcon,
-  AlertCircleIcon,
   BanIcon,
   CheckIcon,
   LockIcon,

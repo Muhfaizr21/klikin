@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   BellIcon,
   CheckIcon,
@@ -9,7 +9,6 @@ import {
   ExternalLinkIcon,
   ClockIcon,
   ShieldCheckIcon,
-  SparklesIcon,
 } from '../Icons';
 import { supabase } from '../../lib/supabase';
 import { API_BASE } from '../../lib/api';
@@ -17,7 +16,7 @@ import { API_BASE } from '../../lib/api';
 export default function OwnerNotifications({ user, token }) {
   const [loading, setLoading] = useState(true);
   const [overview, setOverview] = useState(null);
-  const [error, setError] = useState(null);
+  const [_error, setError] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -34,8 +33,40 @@ export default function OwnerNotifications({ user, token }) {
     in_app_sound: true,
   });
 
-  const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
-  const effectiveUserId = user?.id || 'usr_owner_kopi';
+  const authToken = token || localStorage.getItem('klikin_token') || '';
+  const effectiveUserId = user?.id || '';
+
+  const fetchNotifications = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/owner/notifications`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      const result = await res.json();
+      if (result.success) {
+        setOverview(result.data);
+        if (result.data.preferences) {
+          setPrefs({
+            email_marketing: result.data.preferences.email_marketing ?? false,
+            email_security: result.data.preferences.email_security ?? true,
+            email_billing: result.data.preferences.email_billing ?? true,
+            email_domain_status: result.data.preferences.email_domain_status ?? true,
+            email_new_lead: result.data.preferences.email_new_lead ?? true,
+            in_app_sound: result.data.preferences.in_app_sound ?? true,
+          });
+        }
+      } else {
+        setError(result.error || 'Gagal memuat notifikasi');
+      }
+    } catch (err) {
+      setError('Koneksi terputus: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [authToken]);
 
   useEffect(() => {
     fetchNotifications();
@@ -67,39 +98,7 @@ export default function OwnerNotifications({ user, token }) {
         supabase.removeChannel(channel);
       }
     };
-  }, [effectiveUserId]);
-
-  const fetchNotifications = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/owner/notifications`, {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      });
-      const result = await res.json();
-      if (result.success) {
-        setOverview(result.data);
-        if (result.data.preferences) {
-          setPrefs({
-            email_marketing: result.data.preferences.email_marketing ?? false,
-            email_security: result.data.preferences.email_security ?? true,
-            email_billing: result.data.preferences.email_billing ?? true,
-            email_domain_status: result.data.preferences.email_domain_status ?? true,
-            email_new_lead: result.data.preferences.email_new_lead ?? true,
-            in_app_sound: result.data.preferences.in_app_sound ?? true,
-          });
-        }
-      } else {
-        setError(result.error || 'Gagal memuat notifikasi');
-      }
-    } catch (err) {
-      setError('Koneksi terputus: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [effectiveUserId, fetchNotifications]);
 
   const handleMarkAsRead = async (notifId) => {
     try {

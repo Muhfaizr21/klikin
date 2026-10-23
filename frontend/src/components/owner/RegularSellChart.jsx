@@ -9,9 +9,11 @@ export default function RegularSellChart({ timeline, onExport }) {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
 
-  const labels = timeline && timeline.length > 0 ? timeline.map((t) => t.date_label || t.date) : DEFAULT_DAYS;
-  const views = timeline && timeline.length > 0 ? timeline.map((t) => t.views) : DEFAULT_VIEWS;
-  const clicks = timeline && timeline.length > 0 ? timeline.map((t) => t.clicks) : DEFAULT_CLICKS;
+  const { labels, views, clicks } = React.useMemo(() => ({
+    labels: timeline && timeline.length > 0 ? timeline.map((t) => t.date_label || t.date) : DEFAULT_DAYS,
+    views: timeline && timeline.length > 0 ? timeline.map((t) => t.views) : DEFAULT_VIEWS,
+    clicks: timeline && timeline.length > 0 ? timeline.map((t) => t.clicks) : DEFAULT_CLICKS,
+  }), [timeline]);
 
   // Calculate dynamic peak day
   const peakDayIdx = views.reduce((maxIdx, val, idx, arr) => (val > arr[maxIdx] ? idx : maxIdx), 0);
@@ -124,7 +126,7 @@ export default function RegularSellChart({ timeline, onExport }) {
         chartRef.current = null;
       }
     };
-  }, [timeline]);
+  }, [labels, views, clicks]);
 
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between">

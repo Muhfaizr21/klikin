@@ -19,6 +19,7 @@ import {
   VerifiedBadgeIcon,
   TrendingUpIcon,
   UsersIcon,
+  XIcon,
 } from '../Icons';
 import SubscriptionDetailDrawer from './SubscriptionDetailDrawer';
 import {

@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  GlobeIcon,
   CheckIcon,
   AlertCircleIcon,
   CopyIcon,
@@ -10,17 +9,16 @@ import {
   SparklesIcon,
   SearchIcon,
   SlidersIcon,
-  CheckCircleIcon,
   EyeIcon,
   EyeOffIcon,
 } from '../Icons';
 import { navigateTo } from '../../utils/navigation';
 import { API_BASE } from '../../lib/api';
 
-export default function OwnerPageSettings({ user, token }) {
+export default function OwnerPageSettings({ user: _user, token }) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
+  const [_error, setError] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [savingSection, setSavingSection] = useState(null);
 
@@ -49,14 +47,9 @@ export default function OwnerPageSettings({ user, token }) {
 
   const [copiedLink, setCopiedLink] = useState(false);
 
-  const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
-  const effectiveUserId = user?.id || 'usr_owner_kopi';
+  const authToken = token || localStorage.getItem('klikin_token') || '';
 
-  useEffect(() => {
-    fetchPageSettings();
-  }, []);
-
-  const fetchPageSettings = async () => {
+  const fetchPageSettings = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -87,7 +80,11 @@ export default function OwnerPageSettings({ user, token }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [authToken]);
+
+  useEffect(() => {
+    fetchPageSettings();
+  }, [fetchPageSettings]);
 
   const handleSaveSlug = async (e) => {
     e.preventDefault();

@@ -3,6 +3,7 @@ package admin
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -16,6 +17,13 @@ type PlatformSettingsService struct {
 
 func NewPlatformSettingsService(db *gorm.DB) *PlatformSettingsService {
 	return &PlatformSettingsService{db: db}
+}
+
+func resolveSettingEnv(key, fallback string) string {
+	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
+		return val
+	}
+	return fallback
 }
 
 // DTOs for updating each subsystem
@@ -59,6 +67,7 @@ type SendTestEmailDTO struct {
 type UpdatePaymentSettingsDTO struct {
 	ActiveGateway        string `json:"active_gateway"`
 	PaymentTestMode      bool   `json:"payment_test_mode"`
+	MidtransMerchantID   string `json:"midtrans_merchant_id"`
 	MidtransServerKey    string `json:"midtrans_server_key"`
 	MidtransClientKey    string `json:"midtrans_client_key"`
 	StripePublishableKey string `json:"stripe_publishable_key"`
@@ -103,20 +112,21 @@ func (s *PlatformSettingsService) GetOrCreateSettings() (*models.PlatformSetting
 				ProAllowCustomDomain:   true,
 				FreeShowBadge:          true,
 				ProShowBadge:           false,
-				SMTPHost:               "smtp.resend.com",
+				SMTPHost:               resolveSettingEnv("SMTP_HOST", "smtp.resend.com"),
 				SMTPPort:               587,
-				SMTPUsername:           "resend",
-				SMTPPassword:           "re_mock_smtp_secret_token",
-				SMTPFromEmail:          "noreply@klikin.id",
-				SMTPFromName:           "Klikin Notification",
+				SMTPUsername:           resolveSettingEnv("SMTP_USERNAME", "resend"),
+				SMTPPassword:           os.Getenv("SMTP_PASSWORD"),
+				SMTPFromEmail:          resolveSettingEnv("SMTP_FROM_EMAIL", "noreply@klikin.id"),
+				SMTPFromName:           resolveSettingEnv("SMTP_FROM_NAME", "Klikin Notification"),
 				SMTPEncryption:         "tls",
 				ActiveGateway:          "midtrans",
 				PaymentTestMode:        true,
-				MidtransServerKey:      "SB-Mid-server-dUkRH5CEcu0rXDYRhW-Zn_sv",
-				MidtransClientKey:      "SB-Mid-client-NLCyIuf2UU1OSpzD",
-				StripePublishableKey:   "pk_test_demo_sample_stripe",
-				StripeSecretKey:        "sk_test_demo_sample_secret",
-				StripeWebhookSecret:    "whsec_demo_sample_webhook",
+				MidtransMerchantID:     os.Getenv("MIDTRANS_MERCHANT_ID"),
+				MidtransServerKey:      os.Getenv("MIDTRANS_SERVER_KEY"),
+				MidtransClientKey:      os.Getenv("MIDTRANS_CLIENT_KEY"),
+				StripePublishableKey:   os.Getenv("STRIPE_PUBLISHABLE_KEY"),
+				StripeSecretKey:        os.Getenv("STRIPE_SECRET_KEY"),
+				StripeWebhookSecret:    os.Getenv("STRIPE_WEBHOOK_SECRET"),
 				DefaultSubdomainRoot:   "klikin.id",
 				MaxDomainsPerUserFree:  0,
 				MaxDomainsPerUserPro:   3,
@@ -285,7 +295,10 @@ func (s *PlatformSettingsService) UpdatePayment(actor, ip string, dto UpdatePaym
 
 	setting.ActiveGateway = strings.TrimSpace(dto.ActiveGateway)
 	setting.PaymentTestMode = dto.PaymentTestMode
-	if dto.MidtransServerKey != "" && !strings.Contains(dto.MidtransServerKey, "••••") {
+	if dto.MidtransMerchantID != "" {
+		setting.MidtransMerchantID = strings.TrimSpace(dto.MidtransMerchantID)
+	}
+	if dto.MidtransServerKey != "" && !strings.Contains(dto.MidtransServerKey, "••••") && !strings.Contains(dto.MidtransServerKey, "*") {
 		setting.MidtransServerKey = strings.TrimSpace(dto.MidtransServerKey)
 	}
 	if dto.MidtransClientKey != "" {

@@ -27,9 +27,11 @@ type RegisterDTO struct {
 }
 
 type AuthResult struct {
-	Token string      `json:"token"`
-	User  models.User `json:"user"`
-	Role  string      `json:"role"`
+	Token          string      `json:"token,omitempty"`
+	User           models.User `json:"user,omitempty"`
+	Role           string      `json:"role,omitempty"`
+	Require2FA     bool        `json:"require_2fa,omitempty"`
+	ChallengeToken string      `json:"challenge_token,omitempty"`
 }
 
 // Register registers a new account owner and automatically scaffolds their isolated workspace & bio page
@@ -169,6 +171,94 @@ func (s *AuthService) Login(email, password string) (*AuthResult, error) {
 			return nil, fmt.Errorf("akun Anda sedang ditangguhkan sementara: %s", reason)
 		}
 		return nil, errors.New("akun Anda sedang ditangguhkan sementara oleh Tim Keamanan Klikin")
+	}
+
+	now := time.Now()
+	_ = s.db.Model(&models.User{}).Where("id = ?", user.ID).Update("updated_at", now)
+
+	// SEC-07: If TwoFactorEnabled is active, do not issue full session JWT immediately.
+	// Instead, issue a 5-minute ephemeral 2FA challenge token.
+	if user.TwoFactorEnabled {
+		challengeToken, err := config.Generate2FAChallengeToken(&user)
+		if err != nil {
+			return nil, errors.New("gagal menerbitkan tantangan autentikasi dua faktor")
+		}
+		return &AuthResult{
+			Require2FA:     true,
+			ChallengeToken: challengeToken,
+			User: models.User{
+				ID:       user.ID,
+				Email:    user.Email,
+				Username: user.Username,
+				Role:     user.Role,
+			},
+			Role: string(user.Role),
+		}, nil
+	}
+
+	token, err := config.GenerateToken(&user)
+	if err != nil {
+		return nil, errors.New("gagal menerbitkan token otentikasi")
+	}
+
+	return &AuthResult{
+		Token: token,
+		User:  user,
+		Role:  string(user.Role),
+	}, nil
+}
+
+// Verify2FA validates the TOTP 6-digit code or backup code and delivers authenticated JWT
+func (s *AuthService) Verify2FA(challengeToken, code string) (*AuthResult, error) {
+	if s.db == nil {
+		return nil, errors.New("database connection is unavailable")
+	}
+
+	claims, err := config.Validate2FAChallengeToken(challengeToken)
+	if err != nil {
+		return nil, errors.New("sesi 2FA kedaluwarsa atau tidak valid, silakan masuk kembali")
+	}
+
+	var user models.User
+	if err := s.db.Where("id = ?", claims.UserID).First(&user).Error; err != nil {
+		return nil, errors.New("pengguna tidak ditemukan")
+	}
+
+	cleanCode := strings.TrimSpace(code)
+	if cleanCode == "" {
+		return nil, errors.New("kode 2FA atau kode cadangan wajib diisi")
+	}
+
+	valid := false
+	// 1. Validate 6-digit TOTP
+	if len(cleanCode) == 6 && user.TwoFactorSecret != "" {
+		if ValidateTOTPCode(user.TwoFactorSecret, cleanCode) {
+			valid = true
+		}
+	}
+
+	// 2. Validate one-time backup recovery codes
+	if !valid && strings.HasPrefix(strings.ToUpper(cleanCode), "KLIK-") && user.TwoFactorBackupCodes != "" {
+		storedCodes := strings.Split(user.TwoFactorBackupCodes, ",")
+		var remainingCodes []string
+		for _, bc := range storedCodes {
+			trimmed := strings.TrimSpace(bc)
+			if strings.EqualFold(trimmed, cleanCode) && !valid {
+				valid = true
+				continue // consume used code
+			}
+			if trimmed != "" {
+				remainingCodes = append(remainingCodes, trimmed)
+			}
+		}
+		if valid {
+			user.TwoFactorBackupCodes = strings.Join(remainingCodes, ",")
+			_ = s.db.Model(&user).Update("two_factor_backup_codes", user.TwoFactorBackupCodes)
+		}
+	}
+
+	if !valid {
+		return nil, errors.New("kode autentikasi 2FA atau kode cadangan tidak valid")
 	}
 
 	now := time.Now()

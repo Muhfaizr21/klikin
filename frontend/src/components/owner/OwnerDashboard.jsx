@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import OwnerSidebar from './OwnerSidebar';
 import OwnerHeader from './OwnerHeader';
 import StatCard from './StatCard';
@@ -62,7 +62,7 @@ const playNotificationChime = () => {
 
 export default function OwnerDashboard({ user, token, onLogout, initialTab = 'dashboard' }) {
   const [workspace, setWorkspace] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [submittingLink, setSubmittingLink] = useState(false);
@@ -70,7 +70,7 @@ export default function OwnerDashboard({ user, token, onLogout, initialTab = 'da
   const [analyticsData, setAnalyticsData] = useState(null);
   const [leadsCount, setLeadsCount] = useState(0);
 
-  const parseTabFromLocation = () => {
+  const parseTabFromLocation = useCallback(() => {
     // 1. Pathname check: /owner/:tab
     const path = window.location.pathname.toLowerCase();
     const ownerMatch = path.match(/^\/owner(?:\/([a-z0-9_-]+))?/);
@@ -92,7 +92,7 @@ export default function OwnerDashboard({ user, token, onLogout, initialTab = 'da
 
     if (initialTab && initialTab !== 'dashboard') return initialTab;
     return 'dashboard';
-  };
+  }, [initialTab]);
 
   const [activeTab, setActiveTab] = useState(parseTabFromLocation);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -118,16 +118,21 @@ export default function OwnerDashboard({ user, token, onLogout, initialTab = 'da
       window.removeEventListener('popstate', handleLocationChange);
       window.removeEventListener('hashchange', handleLocationChange);
     };
-  }, []);
+  }, [parseTabFromLocation]);
 
   // Update tab when initialTab prop changes from parent router
   useEffect(() => {
-    if (initialTab && initialTab !== activeTab) {
-      setActiveTab(initialTab);
-      const canonicalPath = `/owner/${initialTab}`;
-      if (window.location.pathname !== canonicalPath) {
-        window.history.replaceState(null, '', canonicalPath);
-      }
+    if (initialTab) {
+      setActiveTab((prev) => {
+        if (initialTab !== prev) {
+          const canonicalPath = `/owner/${initialTab}`;
+          if (window.location.pathname !== canonicalPath) {
+            window.history.replaceState(null, '', canonicalPath);
+          }
+          return initialTab;
+        }
+        return prev;
+      });
     }
   }, [initialTab]);
 
@@ -140,9 +145,30 @@ export default function OwnerDashboard({ user, token, onLogout, initialTab = 'da
     }
   };
 
-  const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
+  const authToken = token || localStorage.getItem('klikin_token') || '';
+  const effectiveUserId = user?.id || '';
 
-  const fetchUnreadNotifications = async () => {
+  const fetchOwnerWorkspace = useCallback(async () => {
+    setLoading(true);
+    setFeedback(null);
+    try {
+      const res = await fetch(`${API_BASE}/owner/workspace`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setWorkspace(data.data);
+      } else {
+        setFeedback({ type: 'error', message: data.error || 'Gagal memuat ruang kerja' });
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', message: 'Gagal terhubung ke backend: ' + err.message });
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  const fetchUnreadNotifications = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/owner/notifications`, {
         headers: {
@@ -160,9 +186,9 @@ export default function OwnerDashboard({ user, token, onLogout, initialTab = 'da
     } catch {
       // silently fallback
     }
-  };
+  }, [authToken, onLogout]);
 
-  const fetchDashboardAnalytics = async () => {
+  const fetchDashboardAnalytics = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/owner/analytics?preset=7d`, {
         headers: {
@@ -180,9 +206,9 @@ export default function OwnerDashboard({ user, token, onLogout, initialTab = 'da
     } catch (err) {
       console.warn('Gagal memuat analitik dashboard:', err);
     }
-  };
+  }, [authToken, onLogout]);
 
-  const fetchDashboardLeads = async () => {
+  const fetchDashboardLeads = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/owner/leads`, {
         headers: {
@@ -200,7 +226,7 @@ export default function OwnerDashboard({ user, token, onLogout, initialTab = 'da
     } catch {
       // fallback
     }
-  };
+  }, [authToken, onLogout]);
 
   useEffect(() => {
     fetchOwnerWorkspace();
@@ -304,27 +330,7 @@ export default function OwnerDashboard({ user, token, onLogout, initialTab = 'da
       window.removeEventListener('klikin:workspace-updated', fetchOwnerWorkspace);
       clearInterval(heartbeat);
     };
-  }, [user]);
-
-  const fetchOwnerWorkspace = async () => {
-    setLoading(true);
-    setFeedback(null);
-    try {
-      const res = await fetch(`${API_BASE}/owner/workspace`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setWorkspace(data.data);
-      } else {
-        setFeedback({ type: 'error', message: data.error || 'Gagal memuat ruang kerja' });
-      }
-    } catch (err) {
-      setFeedback({ type: 'error', message: 'Gagal terhubung ke backend: ' + err.message });
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [effectiveUserId, fetchOwnerWorkspace, fetchUnreadNotifications, fetchDashboardAnalytics, fetchDashboardLeads]);
 
   const handleAddLink = async (title, url) => {
     setSubmittingLink(true);
@@ -377,7 +383,7 @@ export default function OwnerDashboard({ user, token, onLogout, initialTab = 'da
 
   const handleExportAnalytics = async () => {
     try {
-      const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
+      const authToken = token || localStorage.getItem('klikin_token') || '';
       const res = await fetch(`${API_BASE}/owner/analytics/export?preset=7d`, {
         headers: {
           Authorization: `Bearer ${authToken}`,

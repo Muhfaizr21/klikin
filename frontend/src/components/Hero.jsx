@@ -3,7 +3,7 @@ import BioPagePreview from './BioPagePreview';
 import { CheckIcon, AlertCircleIcon } from './Icons';
 import { navigateTo } from '../utils/navigation';
 
-export default function Hero({ onNavigateToLogin, onNavigateToRegister }) {
+export default function Hero({ onNavigateToLogin, onNavigateToRegister: _onNavigateToRegister }) {
   const [username, setUsername] = useState('');
   const [claimStatus, setClaimStatus] = useState(null);
 
@@ -13,7 +13,7 @@ export default function Hero({ onNavigateToLogin, onNavigateToRegister }) {
     if (clean) {
       try {
         localStorage.setItem('klikin_claimed_slug', clean);
-      } catch (err) {
+      } catch  {
         // ignore storage error
       }
     }

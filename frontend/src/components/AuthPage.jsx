@@ -22,6 +22,9 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [require2FA, setRequire2FA] = useState(false);
+  const [twoFACode, setTwoFACode] = useState('');
+  const [challengeToken, setChallengeToken] = useState('');
 
   React.useEffect(() => {
     setMode(initialMode);
@@ -78,6 +81,17 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
         throw new Error(resData.error || resData.message || 'Gagal memproses autentikasi akun.');
       }
 
+      // SEC-07: Handle 2FA Challenge requirement
+      if (resData.data.require_2fa) {
+        setRequire2FA(true);
+        setChallengeToken(resData.data.challenge_token);
+        setFeedback({
+          type: 'info',
+          message: 'Autentikasi Dua Langkah aktif. Masukkan kode 6 digit dari aplikasi autentikator atau gunakan kode cadangan.',
+        });
+        return;
+      }
+
       const user = resData.data.user;
       const token = resData.data.token;
 
@@ -102,6 +116,51 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
         type: 'error',
         message: err.message || 'Gagal memproses data akun.',
       });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify2FA = async (e) => {
+    e.preventDefault();
+    if (!twoFACode.trim()) {
+      setFeedback({ type: 'error', message: 'Kode 2FA wajib diisi.' });
+      return;
+    }
+
+    setLoading(true);
+    setFeedback(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/2fa/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          challenge_token: challengeToken,
+          code: twoFACode.trim(),
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || resData.message || 'Verifikasi 2FA gagal.');
+      }
+
+      const user = resData.data.user;
+      const token = resData.data.token;
+
+      setFeedback({
+        type: 'success',
+        message: `Login berhasil diverifikasi sebagai ${user.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Owner'}!`,
+      });
+
+      if (onAuthSuccess) {
+        setTimeout(() => {
+          onAuthSuccess(user, token);
+        }, 500);
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Verifikasi 2FA gagal.' });
     } finally {
       setLoading(false);
     }
@@ -245,50 +304,56 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
             <div className="flex-1 h-px bg-white/10" />
           </div>
 
-          {/* Quick Demo Test Accounts (Superadmin & Owner) */}
-          <div className="mb-5 p-3.5 rounded-xl bg-[var(--color-obsidian)] border border-[var(--color-graphite)]">
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-[11px] font-mono text-[var(--color-mist)] font-medium tracking-wide flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-acid-lime)]" />
-                <span>Akun Demo Uji Coba:</span>
-              </span>
-              <span className="text-[10px] text-[var(--color-ash)] font-mono">Klik untuk Isi Cepat</span>
+          {/* Quick Demo Test Accounts (Only visible in development or when VITE_ENABLE_DEMO_ACCOUNTS=true) */}
+          {(import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_ACCOUNTS === 'true') && (
+            <div className="mb-5 p-3.5 rounded-xl bg-[var(--color-obsidian)] border border-[var(--color-graphite)]">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-[11px] font-mono text-[var(--color-mist)] font-medium tracking-wide flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-acid-lime)]" />
+                  <span>Akun Demo Uji Coba:</span>
+                </span>
+                <span className="text-[10px] text-[var(--color-ash)] font-mono">Klik untuk Isi Cepat</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail(import.meta.env.VITE_DEMO_ADMIN_EMAIL || 'admin@klikin.id');
+                    setPassword(import.meta.env.VITE_DEMO_ADMIN_PASSWORD || 'admin12345');
+                    setMode('login');
+                    setFeedback(null);
+                  }}
+                  className="text-left p-2.5 rounded-lg bg-black/40 hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/20 transition-all text-xs group"
+                >
+                  <div className="font-semibold text-white group-hover:text-[var(--color-acid-lime)] flex items-center gap-1.5 mb-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                    <span>Super Admin</span>
+                  </div>
+                  <div className="text-[11px] text-zinc-300 font-mono truncate">
+                    {import.meta.env.VITE_DEMO_ADMIN_EMAIL || 'admin@klikin.id'}
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail(import.meta.env.VITE_DEMO_OWNER_EMAIL || 'owner@klikin.id');
+                    setPassword(import.meta.env.VITE_DEMO_OWNER_PASSWORD || 'owner12345');
+                    setMode('login');
+                    setFeedback(null);
+                  }}
+                  className="text-left p-2.5 rounded-lg bg-black/40 hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/20 transition-all text-xs group"
+                >
+                  <div className="font-semibold text-white group-hover:text-emerald-400 flex items-center gap-1.5 mb-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    <span>Owner Toko</span>
+                  </div>
+                  <div className="text-[11px] text-zinc-300 font-mono truncate">
+                    {import.meta.env.VITE_DEMO_OWNER_EMAIL || 'owner@klikin.id'}
+                  </div>
+                </button>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('admin@klikin.id');
-                  setPassword('admin12345');
-                  setMode('login');
-                  setFeedback(null);
-                }}
-                className="text-left p-2.5 rounded-lg bg-black/40 hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/20 transition-all text-xs group"
-              >
-                <div className="font-semibold text-white group-hover:text-[var(--color-acid-lime)] flex items-center gap-1.5 mb-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-                  <span>Super Admin</span>
-                </div>
-                <div className="text-[11px] text-zinc-300 font-mono truncate">admin@klikin.id</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('owner@klikin.id');
-                  setPassword('owner12345');
-                  setMode('login');
-                  setFeedback(null);
-                }}
-                className="text-left p-2.5 rounded-lg bg-black/40 hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/20 transition-all text-xs group"
-              >
-                <div className="font-semibold text-white group-hover:text-emerald-400 flex items-center gap-1.5 mb-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  <span>Owner Toko</span>
-                </div>
-                <div className="text-[11px] text-zinc-300 font-mono truncate">owner@klikin.id</div>
-              </button>
-            </div>
-          </div>
+          )}
 
           {/* Feedback Alert */}
           {feedback && (
@@ -309,7 +374,51 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {require2FA ? (
+            <form onSubmit={handleVerify2FA} className="space-y-4">
+              <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-500/30 text-xs text-purple-200">
+                <div className="font-semibold text-white mb-1">Verifikasi Dua Langkah (2FA) Diperlukan</div>
+                <div>Akun Anda terlindungi 2FA. Buka aplikasi Google Authenticator / Authy dan masukkan kode 6 digit, atau gunakan kode cadangan Anda.</div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                  Kode Autentikasi / Kode Cadangan
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={twoFACode}
+                  onChange={(e) => setTwoFACode(e.target.value)}
+                  placeholder="Contoh: 123456 atau KLIK-XXXX-XXXX"
+                  style={{ color: '#ffffff', WebkitTextFillColor: '#ffffff' }}
+                  className="auth-input w-full bg-[#141517] border border-purple-500/40 focus:border-purple-400 rounded-xl px-3.5 py-2.5 text-sm !text-white placeholder-zinc-500 focus:outline-none transition-colors text-center font-mono tracking-widest text-lg"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || !twoFACode.trim()}
+                className="w-full bg-purple-600 hover:bg-purple-500 text-white font-medium py-2.5 px-4 rounded-xl text-sm transition-all shadow-md active:scale-[0.99] disabled:opacity-50"
+              >
+                {loading ? 'Memverifikasi...' : 'Verifikasi & Masuk'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setRequire2FA(false);
+                  setTwoFACode('');
+                  setFeedback(null);
+                }}
+                className="w-full text-center text-xs text-zinc-400 hover:text-white transition-colors py-1"
+              >
+                ← Kembali ke Form Login
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'register' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -419,7 +528,8 @@ export default function AuthPage({ initialMode = 'login', onBackToHome, onAuthSu
               )}
               <span>{mode === 'register' ? 'Sign Up' : 'Log In'}</span>
             </button>
-          </form>
+            </form>
+          )}
 
           {/* Switch Mode Footer */}
           <div className="text-center mt-6 text-xs text-zinc-400">

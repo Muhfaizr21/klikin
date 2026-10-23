@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   MailIcon,
   CheckIcon,
@@ -63,14 +63,9 @@ export default function OwnerEmailLeads({ user, token }) {
   const [previewConsent, setPreviewConsent] = useState(false);
   const [previewSubmitted, setPreviewSubmitted] = useState(false);
 
-  useEffect(() => {
-    fetchConfig();
-    fetchLeads(1, searchQuery);
-  }, [user]);
-
-  const fetchConfig = async () => {
+  const fetchConfig = useCallback(async () => {
     try {
-      const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
+      const authToken = token || localStorage.getItem('klikin_token') || '';
       const res = await fetch(`${API_BASE}/owner/leads/config`, {
         headers: {
           Authorization: `Bearer ${authToken}`,
@@ -102,11 +97,11 @@ export default function OwnerEmailLeads({ user, token }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, user]);
 
-  const fetchLeads = async (pageNumber = 1, search = '') => {
+  const fetchLeads = useCallback(async (pageNumber = 1, search = '') => {
     try {
-      const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
+      const authToken = token || localStorage.getItem('klikin_token') || '';
       const params = new URLSearchParams({
         page: pageNumber,
         limit: 20,
@@ -128,7 +123,12 @@ export default function OwnerEmailLeads({ user, token }) {
     } catch (err) {
       console.error('Failed to fetch leads:', err);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    fetchConfig();
+    fetchLeads(1, '');
+  }, [fetchConfig, fetchLeads]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -145,7 +145,7 @@ export default function OwnerEmailLeads({ user, token }) {
     setActionLoading(true);
     setFeedback(null);
     try {
-      const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
+      const authToken = token || localStorage.getItem('klikin_token') || '';
       const res = await fetch(`${API_BASE}/owner/leads/config`, {
         method: 'PUT',
         headers: {
@@ -171,7 +171,7 @@ export default function OwnerEmailLeads({ user, token }) {
     if (!deletingLead) return;
     setActionLoading(true);
     try {
-      const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
+      const authToken = token || localStorage.getItem('klikin_token') || '';
       const res = await fetch(`${API_BASE}/owner/leads/${deletingLead.id}`, {
         method: 'DELETE',
         headers: {
@@ -200,7 +200,7 @@ export default function OwnerEmailLeads({ user, token }) {
     }
 
     try {
-      const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
+      const authToken = token || localStorage.getItem('klikin_token') || '';
       const res = await fetch(`${API_BASE}/owner/leads/export`, {
         headers: {
           Authorization: `Bearer ${authToken}`,
@@ -237,7 +237,7 @@ export default function OwnerEmailLeads({ user, token }) {
     setTestingIntegration(true);
     setTestResult(null);
     try {
-      const authToken = token || localStorage.getItem('klikin_token') || 'demo-token-owner-kopi';
+      const authToken = token || localStorage.getItem('klikin_token') || '';
       const res = await fetch(`${API_BASE}/owner/leads/test-integration`, {
         method: 'POST',
         headers: {

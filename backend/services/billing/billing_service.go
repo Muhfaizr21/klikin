@@ -32,13 +32,16 @@ type PlanPricing struct {
 }
 
 type BillingOverviewResponse struct {
-	Subscription       *models.Subscription `json:"subscription"`
-	Invoices           []models.Invoice     `json:"invoices"`
-	DaysRemaining      int                  `json:"days_remaining"`
-	PricingTiers       []PlanPricing        `json:"pricing_tiers"`
-	StripePortalURL    string               `json:"stripe_portal_url"`
-	NextRenewalDate    string               `json:"next_renewal_date"`
-	AvailablePromos    []models.PromoCode   `json:"available_promos"`
+	Subscription        *models.Subscription `json:"subscription"`
+	Invoices            []models.Invoice     `json:"invoices"`
+	DaysRemaining       int                  `json:"days_remaining"`
+	PricingTiers        []PlanPricing        `json:"pricing_tiers"`
+	StripePortalURL     string               `json:"stripe_portal_url"`
+	NextRenewalDate     string               `json:"next_renewal_date"`
+	AvailablePromos     []models.PromoCode   `json:"available_promos"`
+	MidtransClientKey   string               `json:"midtrans_client_key"`
+	MidtransSnapURL     string               `json:"midtrans_snap_url"`
+	MidtransIsProduction bool                 `json:"midtrans_is_production"`
 }
 
 var DefaultPricingTiers = []PlanPricing{
@@ -192,24 +195,32 @@ func (s *BillingService) GetSubscriptionDetails(userID string) (*BillingOverview
 	s.db.Where("is_active = ?", true).Find(&promos)
 
 	return &BillingOverviewResponse{
-		Subscription:    &sub,
-		Invoices:        invoices,
-		DaysRemaining:   daysRemaining,
-		PricingTiers:    s.GetDynamicPricingTiers(),
-		StripePortalURL: "https://billing.stripe.com/p/session/test_simulated_portal",
-		NextRenewalDate: sub.CurrentPeriodEnd.Format("02 January 2006"),
-		AvailablePromos: promos,
+		Subscription:         &sub,
+		Invoices:             invoices,
+		DaysRemaining:        daysRemaining,
+		PricingTiers:         s.GetDynamicPricingTiers(),
+		StripePortalURL:      "",
+		NextRenewalDate:      sub.CurrentPeriodEnd.Format("02 January 2006"),
+		AvailablePromos:      promos,
+		MidtransClientKey:    s.midtrans.GetClientKey(),
+		MidtransSnapURL:      s.midtrans.GetSnapJSURL(),
+		MidtransIsProduction: s.midtrans.IsProduction(),
 	}, nil
 }
 
-// StartTrial activates a 14-day free trial of Klikin Pro
+// StartTrial activates a free trial of Klikin Pro using dynamic duration from PlatformSetting
 func (s *BillingService) StartTrial(userID string, days int) (*models.Subscription, error) {
 	if s.db == nil {
 		return nil, errors.New("database not available")
 	}
 
 	if days <= 0 {
-		days = 14
+		var setting models.PlatformSetting
+		if s.db.Select("trial_duration_days").First(&setting).Error == nil && setting.TrialDurationDays > 0 {
+			days = setting.TrialDurationDays
+		} else {
+			days = 14
+		}
 	}
 
 	var sub models.Subscription
@@ -275,6 +286,7 @@ type UpgradeResponse struct {
 	SnapRedirectURL string               `json:"snap_redirect_url"`
 	ClientKey       string               `json:"client_key"`
 	IsProduction    bool                 `json:"is_production"`
+	SnapURL         string               `json:"snap_url"`
 }
 
 // UpgradePlan creates a pending invoice and requests a Midtrans Snap transaction token
@@ -382,29 +394,37 @@ func (s *BillingService) UpgradePlan(userID string, targetPlan models.PlanType, 
 		SnapRedirectURL: snapRedirectURL,
 		ClientKey:       s.midtrans.GetClientKey(),
 		IsProduction:    s.midtrans.IsProduction(),
+		SnapURL:         s.midtrans.GetSnapJSURL(),
 	}, nil
 }
 
-// VerifyMidtransPayment checks with Midtrans API or marks paid if confirmed
-func (s *BillingService) VerifyMidtransPayment(orderID string) (*models.Invoice, error) {
+// VerifyMidtransPayment checks with Midtrans API and verifies payment status
+func (s *BillingService) VerifyMidtransPayment(userID, orderID string) (*models.Invoice, error) {
 	if s.db == nil {
 		return nil, errors.New("database not available")
 	}
 
 	var invoice models.Invoice
-	if err := s.db.Where("invoice_number = ? OR id = ?", orderID, orderID).First(&invoice).Error; err != nil {
-		return nil, errors.New("invoice tidak ditemukan")
+	query := s.db.Where("invoice_number = ? OR id = ?", orderID, orderID)
+	if strings.TrimSpace(userID) != "" {
+		query = query.Where("user_id = ?", strings.TrimSpace(userID))
+	}
+	if err := query.First(&invoice).Error; err != nil {
+		return nil, errors.New("invoice tidak ditemukan atau bukan milik akun Anda")
 	}
 
 	if invoice.Status == "paid" {
 		return &invoice, nil
 	}
 
-	// Query Midtrans API directly (or confirm mock snap token in local dev)
+	// Query Midtrans API directly (never allow auto-paid mock logic bypass)
 	status, err := s.midtrans.CheckStatus(invoice.InvoiceNumber)
-	isDevMock := strings.HasPrefix(invoice.SnapToken, "mock_snap_")
+	if err != nil {
+		return &invoice, fmt.Errorf("status transaksi belum terkonfirmasi oleh payment gateway: %w", err)
+	}
+
 	now := time.Now()
-	if (err == nil && (status == "settlement" || status == "capture")) || status == "success" || isDevMock {
+	if (status == "settlement" || status == "capture") || status == "success" {
 		invoice.Status = "paid"
 		invoice.PaidAt = &now
 		invoice.Notes = "Pembayaran dikonfirmasi via Midtrans Core API Check"

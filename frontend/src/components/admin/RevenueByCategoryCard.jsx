@@ -8,8 +8,16 @@ import {
   MinusIcon,
 } from '../Icons';
 
-export default function RevenueByCategoryCard() {
-  const categories = [
+const ICON_MAP = {
+  monthly_pro: SparklesIcon,
+  yearly_pro: CreditCardIcon,
+  custom_domain: GlobeIcon,
+  whatsapp_leads: MessageCircleIcon,
+  pixel_retail: ShoppingBagIcon,
+};
+
+export default function RevenueByCategoryCard({ categories: propCategories, summaryNote }) {
+  const defaultCategories = [
     {
       id: 'monthly_pro',
       name: 'Langganan Pro Bulanan',
@@ -67,6 +75,13 @@ export default function RevenueByCategoryCard() {
     },
   ];
 
+  const categories = (propCategories && propCategories.length > 0)
+    ? propCategories.map((c) => ({
+        ...c,
+        icon: ICON_MAP[c.id] || SparklesIcon,
+      }))
+    : defaultCategories;
+
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-2xs flex flex-col justify-between">
       {/* Header */}
@@ -74,7 +89,7 @@ export default function RevenueByCategoryCard() {
         <div>
           <h3 className="text-base font-bold text-slate-900">Pendapatan Berdasarkan Kategori</h3>
           <p className="text-xs text-slate-400 font-medium mt-0.5">
-            Langganan Pro Bulanan menyumbang 43% dari total omzet platform
+            {summaryNote || 'Langganan Pro Bulanan menyumbang 43% dari total omzet platform'}
           </p>
         </div>
         <button

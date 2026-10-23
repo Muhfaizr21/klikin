@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"os"
-	"strings"
 
 	"klikin-backend/middlewares"
 	"klikin-backend/models"
@@ -83,13 +81,6 @@ func (c *BillingController) UpgradePlan(w http.ResponseWriter, r *http.Request) 
 	}
 
 	clientOrigin := r.Header.Get("Origin")
-	if clientOrigin == "" {
-		clientOrigin = strings.Split(os.Getenv("CLIENT_ORIGIN"), ",")[0]
-		if clientOrigin == "" {
-			clientOrigin = "http://localhost:5173"
-		}
-	}
-
 	targetPlan := models.PlanType(body.Plan)
 	resp, err := c.service.UpgradePlan(userID, targetPlan, body.BillingCycle, body.PromoCode, clientOrigin)
 	if err != nil {
@@ -102,6 +93,13 @@ func (c *BillingController) UpgradePlan(w http.ResponseWriter, r *http.Request) 
 
 // VerifyMidtrans handles POST /api/owner/billing/verify-midtrans
 func (c *BillingController) VerifyMidtrans(w http.ResponseWriter, r *http.Request) {
+	claims := middlewares.GetUserFromContext(r)
+	if claims == nil || claims.UserID == "" {
+		views.RenderError(w, http.StatusUnauthorized, "Autentikasi diperlukan")
+		return
+	}
+	userID := claims.UserID
+
 	var body struct {
 		OrderID string `json:"order_id"`
 	}
@@ -110,7 +108,7 @@ func (c *BillingController) VerifyMidtrans(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	invoice, err := c.service.VerifyMidtransPayment(body.OrderID)
+	invoice, err := c.service.VerifyMidtransPayment(userID, body.OrderID)
 	if err != nil {
 		views.RenderError(w, http.StatusBadRequest, err.Error())
 		return

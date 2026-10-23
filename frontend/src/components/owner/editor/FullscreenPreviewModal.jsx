@@ -3,10 +3,8 @@ import {
   XIcon,
   SmartphoneIcon,
   MonitorIcon,
-  ShareIcon,
   CheckIcon,
   CopyIcon,
-  ExternalLinkIcon,
 } from '../../Icons';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import DesktopPreviewFrame from './DesktopPreviewFrame';

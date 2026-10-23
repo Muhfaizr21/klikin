@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShareIcon, XIcon, ExternalLinkIcon, CheckIcon } from '../Icons';
+import { ShareIcon, XIcon, CheckIcon } from '../Icons';
 
 export default function TopStoreTable({
   links = [],

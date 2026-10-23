@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   CheckIcon,
   AlertCircleIcon,
@@ -13,14 +13,13 @@ import {
   CheckCircleIcon,
   ClockIcon,
   UsersIcon,
-  SparklesIcon,
 } from '../Icons';
 import { convertToWebP, formatBytes, validateImageFile } from '../../utils/webpConverter';
 import { API_BASE } from '../../lib/api';
 
 export default function OwnerAccountSettings({ user, token, onRefreshUser }) {
   const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'security' | 'sessions' | 'data'
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState(null); // { type: 'success' | 'error', text: '' }
   const [savingSection, setSavingSection] = useState(null);
 
@@ -67,11 +66,7 @@ export default function OwnerAccountSettings({ user, token, onRefreshUser }) {
   const fileInputRef = useRef(null);
   const authToken = token || localStorage.getItem('klikin_token') || '';
 
-  useEffect(() => {
-    fetchProfileAndSessions();
-  }, []);
-
-  const fetchProfileAndSessions = async () => {
+  const fetchProfileAndSessions = useCallback(async () => {
     setLoading(true);
     try {
       // 1. Fetch Profile
@@ -115,7 +110,11 @@ export default function OwnerAccountSettings({ user, token, onRefreshUser }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [authToken, user]);
+
+  useEffect(() => {
+    fetchProfileAndSessions();
+  }, [fetchProfileAndSessions]);
 
   const showToast = (type, text) => {
     setFeedback({ type, text });

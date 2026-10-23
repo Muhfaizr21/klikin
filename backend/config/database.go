@@ -49,6 +49,8 @@ func ConnectDatabase(dsn string) (*gorm.DB, error) {
 
 	if tableCount >= 5 && os.Getenv("FORCE_MIGRATE") != "true" {
 		log.Println("⚡ Fast-Boot: Database schema (33 models) already verified. Skipping synchronous AutoMigrate.")
+		// Ensure non-destructive schema additions exist
+		_ = db.Exec(`ALTER TABLE platform_settings ADD COLUMN IF NOT EXISTS midtrans_merchant_id VARCHAR(100) DEFAULT '';`).Error
 		return db, nil
 	}
 

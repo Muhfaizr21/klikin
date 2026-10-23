@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { API_BASE } from '../../lib/api';
 import {
   CreditCardIcon,
@@ -15,10 +15,8 @@ import {
   ShieldCheckIcon,
   EditIcon,
   TrashIcon,
-  UsersIcon,
   ArrowUpIcon,
   ArrowDownIcon,
-  LockIcon,
 } from '../Icons';
 import FinanceDetailDrawer from './FinanceDetailDrawer';
 import {
@@ -32,7 +30,7 @@ export default function FinanceManagementView({ token, onRefreshParent }) {
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
   const [summary, setSummary] = useState(null);
   const [loadingSummary, setLoadingSummary] = useState(true);
-  const [errorSummary, setErrorSummary] = useState(null);
+  const [_errorSummary, setErrorSummary] = useState(null);
 
   // Tabs: 'analytics' | 'expenses' | 'transactions' | 'audit'
   const [activeTab, setActiveTab] = useState('analytics');
@@ -78,28 +76,12 @@ export default function FinanceManagementView({ token, onRefreshParent }) {
   // Feedback notification
   const [feedback, setFeedback] = useState(null);
 
-  // Fetch summary when period changes
-  useEffect(() => {
-    fetchSummary();
-  }, [selectedPeriod]);
-
-  // Fetch tab-specific data
-  useEffect(() => {
-    if (activeTab === 'expenses') {
-      fetchExpenses();
-    } else if (activeTab === 'transactions') {
-      fetchTransactions();
-    } else if (activeTab === 'audit') {
-      fetchAuditLogs();
-    }
-  }, [activeTab, expensePage, expenseCategory, txPage, txStatus, txChannel]);
-
-  const showNotification = (msg, type = 'success') => {
+  const showNotification = useCallback((msg, type = 'success') => {
     setFeedback({ type, message: msg });
     setTimeout(() => setFeedback(null), 3500);
-  };
+  }, []);
 
-  const fetchSummary = async () => {
+  const fetchSummary = useCallback(async () => {
     setLoadingSummary(true);
     setErrorSummary(null);
     try {
@@ -116,9 +98,9 @@ export default function FinanceManagementView({ token, onRefreshParent }) {
     } finally {
       setLoadingSummary(false);
     }
-  };
+  }, [selectedPeriod, token]);
 
-  const fetchExpenses = async () => {
+  const fetchExpenses = useCallback(async () => {
     setLoadingExpenses(true);
     try {
       const params = new URLSearchParams({
@@ -142,9 +124,9 @@ export default function FinanceManagementView({ token, onRefreshParent }) {
     } finally {
       setLoadingExpenses(false);
     }
-  };
+  }, [expensePage, expenseSearch, expenseCategory, token, showNotification]);
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = useCallback(async () => {
     setLoadingTransactions(true);
     try {
       const params = new URLSearchParams({
@@ -169,9 +151,9 @@ export default function FinanceManagementView({ token, onRefreshParent }) {
     } finally {
       setLoadingTransactions(false);
     }
-  };
+  }, [txPage, txSearch, txStatus, txChannel, token, showNotification]);
 
-  const fetchAuditLogs = async () => {
+  const fetchAuditLogs = useCallback(async () => {
     setLoadingAudit(true);
     try {
       const res = await fetch(`${API_BASE}/admin/finance/audit-logs`, {
@@ -186,7 +168,23 @@ export default function FinanceManagementView({ token, onRefreshParent }) {
     } finally {
       setLoadingAudit(false);
     }
-  };
+  }, [token, showNotification]);
+
+  // Fetch summary when period changes
+  useEffect(() => {
+    fetchSummary();
+  }, [fetchSummary]);
+
+  // Fetch tab-specific data
+  useEffect(() => {
+    if (activeTab === 'expenses') {
+      fetchExpenses();
+    } else if (activeTab === 'transactions') {
+      fetchTransactions();
+    } else if (activeTab === 'audit') {
+      fetchAuditLogs();
+    }
+  }, [activeTab, fetchExpenses, fetchTransactions, fetchAuditLogs]);
 
   const handleRefreshAll = () => {
     fetchSummary();

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE } from '../../lib/api';
-import { XIcon, CheckCircleIcon, AlertCircleIcon, TrashIcon, DownloadIcon } from '../Icons';
+import { XIcon, AlertCircleIcon, TrashIcon, DownloadIcon } from '../Icons';
 
 const EXPENSE_CATEGORIES = [
   { id: 'database', label: 'Database Managed PostgreSQL (Supabase)' },
@@ -378,7 +378,7 @@ export function CreateManualInvoiceModal({ isOpen, onClose, onSuccess, token }) 
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [amount, setAmount] = useState('29000');
   const [paymentChannel, setPaymentChannel] = useState('qris');
-  const [billingReason, setBillingReason] = useState('admin_manual');
+  const [billingReason] = useState('admin_manual');
   const [status, setStatus] = useState('paid');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
