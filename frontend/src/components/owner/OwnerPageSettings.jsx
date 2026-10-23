@@ -15,7 +15,7 @@ import {
 import { navigateTo } from '../../utils/navigation';
 import { API_BASE } from '../../lib/api';
 
-export default function OwnerPageSettings({ user: _user, token }) {
+export default function OwnerPageSettings({ user, token }) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [_error, setError] = useState(null);

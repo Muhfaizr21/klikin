@@ -21,7 +21,10 @@ func ConnectDatabase(dsn string) (*gorm.DB, error) {
 		return nil, nil
 	}
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+	db, err := gorm.Open(postgres.New(postgres.Config{
+		DSN:                  dsn,
+		PreferSimpleProtocol: true,
+	}), &gorm.Config{
 		Logger:                 logger.Default.LogMode(logger.Warn),
 		SkipDefaultTransaction: true,
 	})
@@ -49,8 +52,11 @@ func ConnectDatabase(dsn string) (*gorm.DB, error) {
 
 	if tableCount >= 5 && os.Getenv("FORCE_MIGRATE") != "true" {
 		log.Println("⚡ Fast-Boot: Database schema (33 models) already verified. Skipping synchronous AutoMigrate.")
-		// Ensure non-destructive schema additions exist
-		_ = db.Exec(`ALTER TABLE platform_settings ADD COLUMN IF NOT EXISTS midtrans_merchant_id VARCHAR(100) DEFAULT '';`).Error
+		// Ensure non-destructive schema additions and performance indexes in background
+		go func() {
+			_ = db.Exec(`ALTER TABLE platform_settings ADD COLUMN IF NOT EXISTS midtrans_merchant_id VARCHAR(100) DEFAULT '';`).Error
+			ensurePerformanceIndexes(db)
+		}()
 		return db, nil
 	}
 
@@ -97,9 +103,7 @@ func ConnectDatabase(dsn string) (*gorm.DB, error) {
 		log.Printf("⚠️ AutoMigrate warning: %v", err)
 	} else {
 		log.Println("✅ Database schema migrated successfully: all 33 core models")
-		// Add performance composite indexes for analytics
-		_ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_analytics_events_composite ON analytics_events(page_id, created_at, type);`).Error
-		_ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_analytics_events_type_created ON analytics_events(page_id, type, created_at);`).Error
+		ensurePerformanceIndexes(db)
 
 		// Run initial database seeder
 		if err := SeedDatabase(db); err != nil {
@@ -109,4 +113,22 @@ func ConnectDatabase(dsn string) (*gorm.DB, error) {
 
 	DB = db
 	return db, nil
+}
+
+// ensurePerformanceIndexes creates composite indexes in a single batch statement for fast analytical queries.
+func ensurePerformanceIndexes(db *gorm.DB) {
+	if db == nil {
+		return
+	}
+	_ = db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_analytics_events_composite ON analytics_events(page_id, created_at, type);
+		CREATE INDEX IF NOT EXISTS idx_analytics_events_type_created ON analytics_events(page_id, type, created_at);
+		CREATE INDEX IF NOT EXISTS idx_analytics_events_created_type ON analytics_events(created_at, type);
+		CREATE INDEX IF NOT EXISTS idx_bio_pages_user_id ON bio_pages(user_id);
+		CREATE INDEX IF NOT EXISTS idx_links_page_id ON links(page_id);
+		CREATE INDEX IF NOT EXISTS idx_subscriptions_status_plan ON subscriptions(status, plan);
+		CREATE INDEX IF NOT EXISTS idx_invoices_status_paid_at ON invoices(status, paid_at);
+		CREATE INDEX IF NOT EXISTS idx_support_tickets_status_priority ON support_tickets(status, priority);
+		CREATE INDEX IF NOT EXISTS idx_users_status_pro_deleted ON users(deleted_at, status, is_pro);
+	`).Error
 }

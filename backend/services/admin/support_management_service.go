@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -122,45 +123,60 @@ func NewSupportManagementService(db *gorm.DB) *SupportManagementService {
 	return &SupportManagementService{db: db}
 }
 
-// GetSupportStats computes real-time support KPIs
+// GetSupportStats computes real-time support KPIs in 1 parallel wave
 func (s *SupportManagementService) GetSupportStats() (*SupportStatsResult, error) {
 	if s.db == nil {
 		return nil, errors.New("database not available")
 	}
 
-	var openTickets int64
-	var inProgressTickets int64
-	var totalTickets int64
-	var highPriorityCount int64
-
-	s.db.Model(&models.SupportTicket{}).Where("status = ?", models.TicketStatusOpen).Count(&openTickets)
-	s.db.Model(&models.SupportTicket{}).Where("status = ?", models.TicketStatusInProgress).Count(&inProgressTickets)
-	s.db.Model(&models.SupportTicket{}).Count(&totalTickets)
-	s.db.Model(&models.SupportTicket{}).Where("priority IN ('high', 'urgent') AND status != ?", models.TicketStatusClosed).Count(&highPriorityCount)
-
-	// Resolved today
 	now := time.Now()
 	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	var resolvedToday int64
-	s.db.Model(&models.SupportTicket{}).Where("status = ? AND updated_at >= ?", models.TicketStatusResolved, startOfToday).Count(&resolvedToday)
 
-	// Satisfaction score from UserFeedback
-	var avgRating float64
-	row := s.db.Model(&models.UserFeedback{}).Select("COALESCE(AVG(rating), 4.9)").Row()
-	_ = row.Scan(&avgRating)
+	var (
+		tScan struct {
+			OpenTickets       int64
+			InProgressTickets int64
+			TotalTickets      int64
+			HighPriorityCount int64
+			ResolvedToday     int64
+		}
+		avgRating float64
+		wg        sync.WaitGroup
+	)
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		s.db.Raw(`
+			SELECT
+				COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS open_tickets,
+				COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS in_progress_tickets,
+				COUNT(*) AS total_tickets,
+				COALESCE(SUM(CASE WHEN priority IN ('high', 'urgent') AND status != ? THEN 1 ELSE 0 END), 0) AS high_priority_count,
+				COALESCE(SUM(CASE WHEN status = ? AND updated_at >= ? THEN 1 ELSE 0 END), 0) AS resolved_today
+			FROM support_tickets
+		`, models.TicketStatusOpen, models.TicketStatusInProgress, models.TicketStatusClosed, models.TicketStatusResolved, startOfToday).Scan(&tScan)
+	}()
+
+	go func() {
+		defer wg.Done()
+		row := s.db.Model(&models.UserFeedback{}).Select("COALESCE(AVG(rating), 4.9)").Row()
+		_ = row.Scan(&avgRating)
+	}()
+	wg.Wait()
+
 	if avgRating <= 0 {
 		avgRating = 4.9
 	}
 
-	// Calculate average response time
-	avgResponseHours := 1.8 // Default healthy average response time in hours
+	avgResponseHours := 1.8
 
 	return &SupportStatsResult{
-		OpenTickets:          openTickets,
-		InProgressTickets:    inProgressTickets,
-		ResolvedToday:        resolvedToday,
-		TotalTickets:         totalTickets,
-		HighPriorityCount:    highPriorityCount,
+		OpenTickets:          tScan.OpenTickets,
+		InProgressTickets:    tScan.InProgressTickets,
+		ResolvedToday:        tScan.ResolvedToday,
+		TotalTickets:         tScan.TotalTickets,
+		HighPriorityCount:    tScan.HighPriorityCount,
 		AvgResponseTimeHours: avgResponseHours,
 		CustomerSatisfaction: avgRating,
 	}, nil
@@ -226,19 +242,28 @@ func (s *SupportManagementService) ListTickets(filter TicketFilterParams) (*Tick
 		return nil, err
 	}
 
-	// Calculate counts by status
+	// Calculate counts by status in 1 single SQL scan
 	statusCounts := make(map[string]int64)
-	var openCnt, inProgCnt, resolvedCnt, closedCnt int64
-	s.db.Model(&models.SupportTicket{}).Where("status = ?", models.TicketStatusOpen).Count(&openCnt)
-	s.db.Model(&models.SupportTicket{}).Where("status = ?", models.TicketStatusInProgress).Count(&inProgCnt)
-	s.db.Model(&models.SupportTicket{}).Where("status = ?", models.TicketStatusResolved).Count(&resolvedCnt)
-	s.db.Model(&models.SupportTicket{}).Where("status = ?", models.TicketStatusClosed).Count(&closedCnt)
+	var sc struct {
+		OpenCnt     int64
+		InProgCnt   int64
+		ResolvedCnt int64
+		ClosedCnt   int64
+	}
+	s.db.Raw(`
+		SELECT
+			COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS open_cnt,
+			COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS in_prog_cnt,
+			COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS resolved_cnt,
+			COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS closed_cnt
+		FROM support_tickets
+	`, models.TicketStatusOpen, models.TicketStatusInProgress, models.TicketStatusResolved, models.TicketStatusClosed).Scan(&sc)
 
-	statusCounts["all"] = openCnt + inProgCnt + resolvedCnt + closedCnt
-	statusCounts["open"] = openCnt
-	statusCounts["in_progress"] = inProgCnt
-	statusCounts["resolved"] = resolvedCnt
-	statusCounts["closed"] = closedCnt
+	statusCounts["all"] = sc.OpenCnt + sc.InProgCnt + sc.ResolvedCnt + sc.ClosedCnt
+	statusCounts["open"] = sc.OpenCnt
+	statusCounts["in_progress"] = sc.InProgCnt
+	statusCounts["resolved"] = sc.ResolvedCnt
+	statusCounts["closed"] = sc.ClosedCnt
 
 	totalPages := int((totalCount + int64(limit) - 1) / int64(limit))
 	if totalPages == 0 {

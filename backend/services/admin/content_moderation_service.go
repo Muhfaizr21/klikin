@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -470,26 +471,76 @@ func (s *ContentModerationService) ensureModerationDataSynced() {
 	}
 }
 
-// computeOverviewStats calculates real-time Trust & Safety KPIs
+// computeOverviewStats calculates real-time Trust & Safety KPIs in a single parallel wave
 func (s *ContentModerationService) computeOverviewStats() ModerationOverviewStats {
 	var stats ModerationOverviewStats
 	if s.db == nil {
 		return stats
 	}
 
-	s.db.Model(&models.BioPage{}).Count(&stats.TotalPublicPages)
-	s.db.Model(&models.BioPage{}).Where("is_published = ? AND moderation_status != ?", true, "taken_down").Count(&stats.LivePublishedPages)
-	s.db.Model(&models.BioPage{}).Where("moderation_status = ?", "flagged").Count(&stats.FlaggedPagesCount)
-	s.db.Model(&models.BioPage{}).Where("moderation_status = ?", "taken_down").Count(&stats.TakenDownPagesCount)
-	s.db.Model(&models.ContentReport{}).Where("status = ?", models.ReportStatusPending).Count(&stats.PendingReportsCount)
-	s.db.Model(&models.ContentReport{}).Where("status = ?", models.ReportStatusActioned).Count(&stats.ActionedReportsCount)
-	s.db.Model(&models.BlacklistedDomain{}).Where("is_active = ?", true).Count(&stats.ActiveBlacklistCount)
-	s.db.Model(&models.User{}).Where("status = ? AND deleted_at IS NULL", "banned").Count(&stats.BannedViolatorsCount)
+	var wg sync.WaitGroup
+	wg.Add(4)
 
-	var totalHits int64
-	s.db.Model(&models.BlacklistedDomain{}).Select("COALESCE(SUM(hit_count), 0)").Scan(&totalHits)
-	stats.TotalBlockedHits = totalHits
+	go func() {
+		defer wg.Done()
+		var pScan struct {
+			TotalPublicPages    int64
+			LivePublishedPages  int64
+			FlaggedPagesCount   int64
+			TakenDownPagesCount int64
+		}
+		s.db.Raw(`
+			SELECT
+				COUNT(*) AS total_public_pages,
+				COALESCE(SUM(CASE WHEN is_published = true AND COALESCE(moderation_status, '') != 'taken_down' THEN 1 ELSE 0 END), 0) AS live_published_pages,
+				COALESCE(SUM(CASE WHEN moderation_status = 'flagged' THEN 1 ELSE 0 END), 0) AS flagged_pages_count,
+				COALESCE(SUM(CASE WHEN moderation_status = 'taken_down' THEN 1 ELSE 0 END), 0) AS taken_down_pages_count
+			FROM bio_pages
+		`).Scan(&pScan)
+		stats.TotalPublicPages = pScan.TotalPublicPages
+		stats.LivePublishedPages = pScan.LivePublishedPages
+		stats.FlaggedPagesCount = pScan.FlaggedPagesCount
+		stats.TakenDownPagesCount = pScan.TakenDownPagesCount
+	}()
 
+	go func() {
+		defer wg.Done()
+		var rScan struct {
+			PendingReportsCount  int64
+			ActionedReportsCount int64
+		}
+		s.db.Raw(`
+			SELECT
+				COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS pending_reports_count,
+				COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS actioned_reports_count
+			FROM content_reports
+		`, models.ReportStatusPending, models.ReportStatusActioned).Scan(&rScan)
+		stats.PendingReportsCount = rScan.PendingReportsCount
+		stats.ActionedReportsCount = rScan.ActionedReportsCount
+	}()
+
+	go func() {
+		defer wg.Done()
+		var bScan struct {
+			ActiveBlacklistCount int64
+			TotalBlockedHits     int64
+		}
+		s.db.Raw(`
+			SELECT
+				COALESCE(SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END), 0) AS active_blacklist_count,
+				COALESCE(SUM(hit_count), 0) AS total_blocked_hits
+			FROM blacklisted_domains
+		`).Scan(&bScan)
+		stats.ActiveBlacklistCount = bScan.ActiveBlacklistCount
+		stats.TotalBlockedHits = bScan.TotalBlockedHits
+	}()
+
+	go func() {
+		defer wg.Done()
+		s.db.Model(&models.User{}).Where("status = ? AND deleted_at IS NULL", "banned").Count(&stats.BannedViolatorsCount)
+	}()
+
+	wg.Wait()
 	return stats
 }
 
@@ -506,41 +557,63 @@ func (s *ContentModerationService) ListPublicPages(filter ModerationPageFilter) 
 		filter.Limit = 15
 	}
 
-	var pages []models.BioPage
-	if err := s.db.Order("updated_at desc").Find(&pages).Error; err != nil {
-		return nil, err
+	var (
+		pages      []models.BioPage
+		pagesErr   error
+		users      []models.User
+		blacklist  []models.BlacklistedDomain
+		allLinks   []models.Link
+		allBlocks  []models.BioBlock
+		allReports []models.ContentReport
+		wg         sync.WaitGroup
+	)
+
+	wg.Add(6)
+	go func() {
+		defer wg.Done()
+		pagesErr = s.db.Order("updated_at desc").Find(&pages).Error
+	}()
+	go func() {
+		defer wg.Done()
+		s.db.Unscoped().Find(&users)
+	}()
+	go func() {
+		defer wg.Done()
+		s.db.Where("is_active = ?", true).Find(&blacklist)
+	}()
+	go func() {
+		defer wg.Done()
+		s.db.Where("is_active = ?", true).Find(&allLinks)
+	}()
+	go func() {
+		defer wg.Done()
+		s.db.Where("is_active = ?", true).Find(&allBlocks)
+	}()
+	go func() {
+		defer wg.Done()
+		s.db.Find(&allReports)
+	}()
+	wg.Wait()
+
+	if pagesErr != nil {
+		return nil, pagesErr
 	}
 
-	// Preload users map
-	var users []models.User
-	s.db.Unscoped().Find(&users)
 	userMap := make(map[string]models.User, len(users))
 	for _, u := range users {
 		userMap[u.ID] = u
 	}
 
-	// Preload active blacklist rules for URL matching
-	var blacklist []models.BlacklistedDomain
-	s.db.Where("is_active = ?", true).Find(&blacklist)
-
-	// Preload all links and blocks
-	var allLinks []models.Link
-	s.db.Where("is_active = ?", true).Find(&allLinks)
 	linksByPage := make(map[string][]models.Link)
 	for _, l := range allLinks {
 		linksByPage[l.PageID] = append(linksByPage[l.PageID], l)
 	}
 
-	var allBlocks []models.BioBlock
-	s.db.Where("is_active = ?", true).Find(&allBlocks)
 	blocksByPage := make(map[string][]models.BioBlock)
 	for _, b := range allBlocks {
 		blocksByPage[b.PageID] = append(blocksByPage[b.PageID], b)
 	}
 
-	// Preload reports count by page
-	var allReports []models.ContentReport
-	s.db.Find(&allReports)
 	pendingByPage := make(map[string]int)
 	totalRepByPage := make(map[string]int)
 	for _, r := range allReports {

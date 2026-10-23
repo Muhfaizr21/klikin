@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -152,57 +153,98 @@ func NewSecurityAuditService(db *gorm.DB) SecurityAuditUseCase {
 	return &securityAuditService{db: db}
 }
 
-// GetSecurityOverview retrieves all top-level KPI metrics
+// GetSecurityOverview retrieves all top-level KPI metrics in a single parallel wave
 func (s *securityAuditService) GetSecurityOverview() (*SecurityOverviewResult, error) {
-	var totalAudits int64
-	s.db.Model(&models.PlatformAuditLog{}).Count(&totalAudits)
+	now := time.Now()
+	startOfDay := now.Truncate(24 * time.Hour)
 
-	startOfDay := time.Now().Truncate(24 * time.Hour)
+	var (
+		totalAudits       int64
+		failedLoginsToday int64
+		successLoginsToday int64
+		activeBlacklisted int64
+		activeSessions    int64
+		unresolvedErrors  int64
+		criticalErrors    int64
+		policy            models.SecurityPolicy
+		lastBackupAt      *time.Time
+		wg                sync.WaitGroup
+	)
 
-	var failedLoginsToday int64
-	s.db.Model(&models.LoginHistoryLog{}).
-		Where("status = ? AND created_at >= ?", "failed", startOfDay).
-		Count(&failedLoginsToday)
+	wg.Add(7)
 
-	var successLoginsToday int64
-	s.db.Model(&models.LoginHistoryLog{}).
-		Where("status = ? AND created_at >= ?", "success", startOfDay).
-		Count(&successLoginsToday)
+	go func() {
+		defer wg.Done()
+		s.db.Model(&models.PlatformAuditLog{}).Count(&totalAudits)
+	}()
 
-	var activeBlacklisted int64
-	s.db.Model(&models.BlacklistedIP{}).
-		Where("is_active = true AND (expires_at IS NULL OR expires_at > ?)", time.Now()).
-		Count(&activeBlacklisted)
-
-	var activeSessions int64
-	s.db.Model(&models.AdminSession{}).
-		Where("is_revoked = false AND expires_at > ?", time.Now()).
-		Count(&activeSessions)
-
-	var unresolvedErrors int64
-	s.db.Model(&models.AppErrorLog{}).
-		Where("resolved = false").
-		Count(&unresolvedErrors)
-
-	var criticalErrors int64
-	s.db.Model(&models.AppErrorLog{}).
-		Where("severity = ? AND resolved = false", "critical").
-		Count(&criticalErrors)
-
-	var policy models.SecurityPolicy
-	err := s.db.First(&policy).Error
-	if err != nil {
-		policy = models.SecurityPolicy{
-			Require2FAForSuperAdmin: true,
-			RateLimitRequestsPerMin: 120,
+	go func() {
+		defer wg.Done()
+		var lScan struct {
+			FailedToday  int64
+			SuccessToday int64
 		}
-	}
+		s.db.Raw(`
+			SELECT
+				COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) AS failed_today,
+				COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0) AS success_today
+			FROM login_history_logs
+			WHERE created_at >= ?
+		`, startOfDay).Scan(&lScan)
+		failedLoginsToday = lScan.FailedToday
+		successLoginsToday = lScan.SuccessToday
+	}()
 
-	var latestBackup models.DataBackupRecord
-	var lastBackupAt *time.Time
-	if err := s.db.Order("created_at desc").First(&latestBackup).Error; err == nil {
-		lastBackupAt = &latestBackup.CreatedAt
-	}
+	go func() {
+		defer wg.Done()
+		s.db.Model(&models.BlacklistedIP{}).
+			Where("is_active = true AND (expires_at IS NULL OR expires_at > ?)", now).
+			Count(&activeBlacklisted)
+	}()
+
+	go func() {
+		defer wg.Done()
+		s.db.Model(&models.AdminSession{}).
+			Where("is_revoked = false AND expires_at > ?", now).
+			Count(&activeSessions)
+	}()
+
+	go func() {
+		defer wg.Done()
+		var eScan struct {
+			Unresolved int64
+			Critical   int64
+		}
+		s.db.Raw(`
+			SELECT
+				COUNT(*) AS unresolved,
+				COALESCE(SUM(CASE WHEN severity = 'critical' THEN 1 ELSE 0 END), 0) AS critical
+			FROM app_error_logs
+			WHERE resolved = false
+		`).Scan(&eScan)
+		unresolvedErrors = eScan.Unresolved
+		criticalErrors = eScan.Critical
+	}()
+
+	go func() {
+		defer wg.Done()
+		if err := s.db.First(&policy).Error; err != nil {
+			policy = models.SecurityPolicy{
+				Require2FAForSuperAdmin: true,
+				RateLimitRequestsPerMin: 120,
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		var latestBackup models.DataBackupRecord
+		if err := s.db.Order("created_at desc").First(&latestBackup).Error; err == nil {
+			lastBackupAt = &latestBackup.CreatedAt
+		}
+	}()
+
+	wg.Wait()
 
 	return &SecurityOverviewResult{
 		TotalAuditEvents:        totalAudits,

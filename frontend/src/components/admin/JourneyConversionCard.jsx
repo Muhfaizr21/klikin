@@ -70,7 +70,19 @@ export default function JourneyConversionCard({ stages: propStages, dropoffAlert
     },
   ];
 
-  const funnelStages = (propStages && propStages.length > 0) ? propStages : defaultFunnelStages;
+  const funnelStages = (propStages && propStages.length > 0)
+    ? propStages.map((s) => {
+        const isWarning = s.isWarning ?? s.is_warning ?? false;
+        const isSuccess = s.isSuccess ?? s.is_success ?? false;
+        const barColor = s.barColor || s.bar_color || (isWarning ? 'bg-[#f59e0b] hover:bg-[#d97706]' : isSuccess ? 'bg-[#bef264] hover:bg-[#a3e635]' : 'bg-[#ddd6fe] hover:bg-[#c4b5fd]');
+        return {
+          ...s,
+          isWarning,
+          isSuccess,
+          barColor,
+        };
+      })
+    : defaultFunnelStages;
 
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-2xs flex flex-col justify-between">

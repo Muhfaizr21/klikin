@@ -15,6 +15,23 @@ import (
 	"klikin-backend/models"
 )
 
+type ownerAnalyticsCacheEntry struct {
+	data      *AnalyticsResponse
+	expiresAt time.Time
+}
+
+var (
+	ownerAnalyticsCacheMu sync.RWMutex
+	ownerAnalyticsCache   = make(map[string]ownerAnalyticsCacheEntry)
+)
+
+// InvalidateOwnerAnalyticsCache clears the short-lived owner analytics cache.
+func InvalidateOwnerAnalyticsCache() {
+	ownerAnalyticsCacheMu.Lock()
+	ownerAnalyticsCache = make(map[string]ownerAnalyticsCacheEntry)
+	ownerAnalyticsCacheMu.Unlock()
+}
+
 type AnalyticsService struct {
 	db *gorm.DB
 }
@@ -148,7 +165,11 @@ func (s *AnalyticsService) RecordEvent(dto RecordEventDTO) error {
 		s.db.Model(&models.Link{}).Where("id = ?", event.LinkID).UpdateColumn("click_count", gorm.Expr("click_count + 1"))
 	}
 
-	return s.db.Create(&event).Error
+	err := s.db.Create(&event).Error
+	if err == nil {
+		InvalidateOwnerAnalyticsCache()
+	}
+	return err
 }
 
 // GetOwnerAnalytics calculates aggregated and granular metrics for the owner's bio page
@@ -157,21 +178,7 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 		return nil, errors.New("database not available")
 	}
 
-	// 1. Verify User and Page Tenancy
-	var user models.User
-	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
-		return nil, errors.New("pengguna tidak ditemukan")
-	}
-
-	var page models.BioPage
-	if err := s.db.Where("user_id = ?", userID).First(&page).Error; err != nil {
-		return nil, errors.New("halaman bio tidak ditemukan")
-	}
-
-	// Determine actual Pro status (user.IsPro or explicit preview requested)
-	effectivePro := user.IsPro
-
-	// 2. Normalize Dates
+	// Normalize Dates first so we can check cache before DB roundtrip
 	start := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, time.Local)
 	end := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 23, 59, 59, 999999999, time.Local)
 
@@ -184,7 +191,41 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 		days = 1
 	}
 
-	// 3-7. Execute Summary, RealtimeActive, DailyTimeline, Hourly, and LinkBreakdown concurrently in 1 network roundtrip
+	cacheKey := fmt.Sprintf("%s|%s|%s", userID, start.Format("2006-01-02"), end.Format("2006-01-02"))
+	now := time.Now()
+	ownerAnalyticsCacheMu.RLock()
+	if cached, ok := ownerAnalyticsCache[cacheKey]; ok && now.Before(cached.expiresAt) && cached.data != nil {
+		ownerAnalyticsCacheMu.RUnlock()
+		return cached.data, nil
+	}
+	ownerAnalyticsCacheMu.RUnlock()
+
+	// 1. Verify User and Page Tenancy in 1 single SQL query
+	type TenancyRow struct {
+		UserID string
+		IsPro  bool
+		PageID string
+	}
+	var tenancy TenancyRow
+	s.db.Raw(`
+		SELECT u.id AS user_id, u.is_pro, COALESCE(p.id, '') AS page_id
+		FROM users u
+		LEFT JOIN bio_pages p ON p.user_id = u.id
+		WHERE u.id = ?
+		LIMIT 1
+	`, userID).Scan(&tenancy)
+
+	if tenancy.UserID == "" {
+		return nil, errors.New("pengguna tidak ditemukan")
+	}
+	if tenancy.PageID == "" {
+		return nil, errors.New("halaman bio tidak ditemukan")
+	}
+
+	effectivePro := tenancy.IsPro
+	pageID := tenancy.PageID
+
+	// 3-8. Execute Summary, RealtimeActive, DailyTimeline, Hourly, LinkBreakdown, and 6 Metric Distributions concurrently in 1 single parallel wave
 	type SummaryResult struct {
 		PageViews      int64 `gorm:"column:page_views"`
 		TotalClicks    int64 `gorm:"column:total_clicks"`
@@ -206,30 +247,51 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 		BlockID string `gorm:"column:block_id"`
 		Clicks  int64  `gorm:"column:clicks"`
 	}
+	type MetricRow struct {
+		Name  string `gorm:"column:name"`
+		Count int64  `gorm:"column:count"`
+	}
 
 	var (
-		sumRes         SummaryResult
-		sumErr         error
-		realtimeActive int64
-		dailyPoints    []DailyPoint
-		hourlyRows     []HourlyRow
-		linkRows       []LinkBreakdownRow
-		wg             sync.WaitGroup
+		sumRes             SummaryResult
+		sumErr             error
+		realtimeActive     int64
+		dailyPoints        []DailyPoint
+		hourlyRows         []HourlyRow
+		linkRows           []LinkBreakdownRow
+		trafficSourceRows  []MetricRow
+		geoCountryRows     []MetricRow
+		geoCityRows        []MetricRow
+		deviceRows         []MetricRow
+		browserRows        []MetricRow
+		referrerRows       []MetricRow
+		wg                 sync.WaitGroup
 	)
-	fifteenMinutesAgo := time.Now().Add(-15 * time.Minute)
+	fifteenMinutesAgo := now.Add(-15 * time.Minute)
 
-	wg.Add(5)
+	fetchMetricRows := func(columnName, defaultVal string, dest *[]MetricRow) {
+		defer wg.Done()
+		s.db.Model(&models.AnalyticsEvent{}).
+			Select(fmt.Sprintf("COALESCE(NULLIF(%s, ''), '%s') AS name, COUNT(*) AS count", columnName, defaultVal)).
+			Where("page_id = ? AND created_at >= ? AND created_at <= ?", pageID, start, end).
+			Group("name").
+			Order("count DESC").
+			Limit(10).
+			Scan(dest)
+	}
+
+	wg.Add(11)
 	go func() {
 		defer wg.Done()
 		sumErr = s.db.Model(&models.AnalyticsEvent{}).
 			Select("COUNT(CASE WHEN type = 'view' THEN 1 END) AS page_views, COUNT(CASE WHEN type = 'click' THEN 1 END) AS total_clicks, COUNT(DISTINCT ip_hash) AS unique_visitors").
-			Where("page_id = ? AND created_at >= ? AND created_at <= ?", page.ID, start, end).
+			Where("page_id = ? AND created_at >= ? AND created_at <= ?", pageID, start, end).
 			Scan(&sumRes).Error
 	}()
 	go func() {
 		defer wg.Done()
 		s.db.Model(&models.AnalyticsEvent{}).
-			Where("page_id = ? AND created_at >= ?", page.ID, fifteenMinutesAgo).
+			Where("page_id = ? AND created_at >= ?", pageID, fifteenMinutesAgo).
 			Distinct("ip_hash").
 			Count(&realtimeActive)
 	}()
@@ -237,7 +299,7 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 		defer wg.Done()
 		s.db.Model(&models.AnalyticsEvent{}).
 			Select("TO_CHAR(created_at, 'YYYY-MM-DD') AS d, COUNT(CASE WHEN type = 'view' THEN 1 END) AS views, COUNT(CASE WHEN type = 'click' THEN 1 END) AS clicks").
-			Where("page_id = ? AND created_at >= ? AND created_at <= ?", page.ID, start, end).
+			Where("page_id = ? AND created_at >= ? AND created_at <= ?", pageID, start, end).
 			Group("d").
 			Order("d ASC").
 			Scan(&dailyPoints)
@@ -246,7 +308,7 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 		defer wg.Done()
 		s.db.Model(&models.AnalyticsEvent{}).
 			Select("EXTRACT(HOUR FROM created_at)::integer AS h, COUNT(CASE WHEN type = 'view' THEN 1 END) AS views, COUNT(CASE WHEN type = 'click' THEN 1 END) AS clicks").
-			Where("page_id = ? AND created_at >= ? AND created_at <= ?", page.ID, start, end).
+			Where("page_id = ? AND created_at >= ? AND created_at <= ?", pageID, start, end).
 			Group("h").
 			Order("h ASC").
 			Scan(&hourlyRows)
@@ -255,12 +317,18 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 		defer wg.Done()
 		s.db.Model(&models.AnalyticsEvent{}).
 			Select("COALESCE(NULLIF(target_title, ''), NULLIF(target_url, ''), 'Tautan Langsung') AS title, COALESCE(target_url, '') AS url, COALESCE(block_id, '') AS block_id, COUNT(*) AS clicks").
-			Where("page_id = ? AND type = 'click' AND created_at >= ? AND created_at <= ?", page.ID, start, end).
+			Where("page_id = ? AND type = 'click' AND created_at >= ? AND created_at <= ?", pageID, start, end).
 			Group("title, url, block_id").
 			Order("clicks DESC").
 			Limit(50).
 			Scan(&linkRows)
 	}()
+	go fetchMetricRows("traffic_source", "Direct", &trafficSourceRows)
+	go fetchMetricRows("country", "Indonesia", &geoCountryRows)
+	go fetchMetricRows("city", "Jakarta", &geoCityRows)
+	go fetchMetricRows("device", "Mobile", &deviceRows)
+	go fetchMetricRows("browser", "Chrome", &browserRows)
+	go fetchMetricRows("referrer", "Direct / Bookmark", &referrerRows)
 	wg.Wait()
 
 	if sumErr != nil {
@@ -337,7 +405,7 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 	// Fallback to existing links if no clicks recorded yet in timeframe
 	if len(linksBreakdown) == 0 {
 		var existingLinks []models.Link
-		s.db.Where("page_id = ?", page.ID).Find(&existingLinks)
+		s.db.Where("page_id = ?", pageID).Find(&existingLinks)
 		for _, l := range existingLinks {
 			linksBreakdown = append(linksBreakdown, LinkStatItem{
 				Title:     l.Title,
@@ -349,26 +417,13 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 		}
 	}
 
-	// 8. Format Pro Metric Distributions via SQL Aggregations
-	queryMetrics := func(columnName, defaultVal string, total int64) []MetricItem {
-		type MetricRow struct {
-			Name  string `gorm:"column:name"`
-			Count int64  `gorm:"column:count"`
-		}
-		var rows []MetricRow
-		s.db.Model(&models.AnalyticsEvent{}).
-			Select(fmt.Sprintf("COALESCE(NULLIF(%s, ''), '%s') AS name, COUNT(*) AS count", columnName, defaultVal)).
-			Where("page_id = ? AND created_at >= ? AND created_at <= ?", page.ID, start, end).
-			Group("name").
-			Order("count DESC").
-			Limit(10).
-			Scan(&rows)
-
+	totalEvents := pageViews + totalClicks
+	formatMetrics := func(rows []MetricRow) []MetricItem {
 		var items []MetricItem
 		for _, r := range rows {
 			pct := 0.0
-			if total > 0 {
-				pct = roundToTwo((float64(r.Count) / float64(total)) * 100)
+			if totalEvents > 0 {
+				pct = roundToTwo((float64(r.Count) / float64(totalEvents)) * 100)
 			}
 			items = append(items, MetricItem{
 				Name:       r.Name,
@@ -378,25 +433,6 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 		}
 		return items
 	}
-
-	totalEvents := pageViews + totalClicks
-	var (
-		trafficSources []MetricItem
-		geoCountries   []MetricItem
-		geoCities      []MetricItem
-		devices        []MetricItem
-		browsers       []MetricItem
-		referrers      []MetricItem
-		wgMetrics      sync.WaitGroup
-	)
-	wgMetrics.Add(6)
-	go func() { defer wgMetrics.Done(); trafficSources = queryMetrics("traffic_source", "Direct", totalEvents) }()
-	go func() { defer wgMetrics.Done(); geoCountries = queryMetrics("country", "Indonesia", totalEvents) }()
-	go func() { defer wgMetrics.Done(); geoCities = queryMetrics("city", "Jakarta", totalEvents) }()
-	go func() { defer wgMetrics.Done(); devices = queryMetrics("device", "Mobile", totalEvents) }()
-	go func() { defer wgMetrics.Done(); browsers = queryMetrics("browser", "Chrome", totalEvents) }()
-	go func() { defer wgMetrics.Done(); referrers = queryMetrics("referrer", "Direct / Bookmark", totalEvents) }()
-	wgMetrics.Wait()
 
 	resp := &AnalyticsResponse{
 		IsPro:     effectivePro,
@@ -413,13 +449,20 @@ func (s *AnalyticsService) GetOwnerAnalytics(userID string, startDate, endDate t
 		Timeline:       timeline,
 		Hourly:         hourly,
 		LinksBreakdown: linksBreakdown,
-		TrafficSources: trafficSources,
-		GeoCountries:   geoCountries,
-		GeoCities:      geoCities,
-		Devices:        devices,
-		Browsers:       browsers,
-		Referrers:      referrers,
+		TrafficSources: formatMetrics(trafficSourceRows),
+		GeoCountries:   formatMetrics(geoCountryRows),
+		GeoCities:      formatMetrics(geoCityRows),
+		Devices:        formatMetrics(deviceRows),
+		Browsers:       formatMetrics(browserRows),
+		Referrers:      formatMetrics(referrerRows),
 	}
+
+	ownerAnalyticsCacheMu.Lock()
+	ownerAnalyticsCache[cacheKey] = ownerAnalyticsCacheEntry{
+		data:      resp,
+		expiresAt: now.Add(10 * time.Second),
+	}
+	ownerAnalyticsCacheMu.Unlock()
 
 	return resp, nil
 }

@@ -49,7 +49,12 @@ export default function TopTenantPerformanceCard({
     },
   ];
 
-  const tenants = (propTenants && propTenants.length > 0) ? propTenants : defaultTenants;
+  const tenants = Array.isArray(propTenants)
+    ? propTenants.map((t) => ({
+        ...t,
+        barColor: t.barColor || t.bar_color || 'bg-[#6366f1]',
+      }))
+    : defaultTenants;
 
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-2xs flex flex-col justify-between">
@@ -63,46 +68,58 @@ export default function TopTenantPerformanceCard({
 
       {/* Tenant List */}
       <div className="divide-y divide-slate-50 py-1 space-y-3.5">
-        {tenants.map((t) => (
-          <div key={t.id} className="pt-3.5 first:pt-2 flex items-center justify-between gap-3">
+        {tenants.length === 0 ? (
+          <div className="py-8 text-center text-xs text-slate-400 font-medium">
+            Tidak ada aktivitas tenant yang tercatat untuk filter ini
+          </div>
+        ) : (
+          tenants.map((t) => (
+          <div key={t.id} className="pt-3.5 first:pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
             {/* Avatar & Info */}
-            <div className="flex items-center gap-2.5 min-w-[150px] sm:min-w-[190px]">
-              <img
-                src={t.avatar}
-                alt={t.name}
-                className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-2xs shrink-0 bg-slate-100"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  if (e.target.nextSibling) {
-                    e.target.nextSibling.style.display = 'flex';
-                  }
-                }}
-              />
-              <div className="w-8 h-8 rounded-full bg-slate-200 hidden items-center justify-center text-xs font-bold text-slate-700 shrink-0">
-                {t.initials || 'KL'}
+            <div className="flex items-center justify-between sm:justify-start gap-2.5 min-w-0 sm:min-w-[190px]">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <img
+                  src={t.avatar}
+                  alt={t.name}
+                  className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-2xs shrink-0 bg-slate-100"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    if (e.target.nextSibling) {
+                      e.target.nextSibling.style.display = 'flex';
+                    }
+                  }}
+                />
+                <div className="w-8 h-8 rounded-full bg-slate-200 hidden items-center justify-center text-xs font-bold text-slate-700 shrink-0">
+                  {t.initials || 'KL'}
+                </div>
+                <div className="truncate">
+                  <h4 className="text-xs font-bold text-slate-900 truncate leading-snug">{t.name}</h4>
+                  <p className="text-[11px] text-slate-400 truncate font-medium">
+                    {t.role} • <span className="text-slate-600 font-mono font-semibold">{t.revenue}</span>
+                  </p>
+                </div>
               </div>
-              <div className="truncate">
-                <h4 className="text-xs font-bold text-slate-900 truncate leading-snug">{t.name}</h4>
-                <p className="text-[11px] text-slate-400 truncate font-medium">
-                  {t.role} • <span className="text-slate-600 font-mono font-semibold">{t.revenue}</span>
-                </p>
-              </div>
+
+              {/* Mobile Rate Percentage */}
+              <span className="sm:hidden text-xs font-bold text-slate-900 font-mono shrink-0">
+                {t.rate}
+              </span>
             </div>
 
-            {/* Horizontal Bar */}
-            <div className="flex-1 max-w-[160px] bg-slate-100/80 h-2.5 rounded-full overflow-hidden">
+            {/* Horizontal Bar: full width on mobile, inline on sm+ */}
+            <div className="w-full sm:flex-1 sm:max-w-[160px] bg-slate-100/80 h-2 sm:h-2.5 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${t.barColor || 'bg-[#6366f1]'}`}
                 style={{ width: t.rate }}
               />
             </div>
 
-            {/* Rate Percentage */}
-            <div className="text-right min-w-[36px]">
+            {/* Rate Percentage on Desktop (sm+) */}
+            <div className="hidden sm:block text-right min-w-[36px]">
               <span className="text-xs font-bold text-slate-900 font-mono">{t.rate}</span>
             </div>
           </div>
-        ))}
+        )))}
       </div>
 
       {/* Bottom Hint Banner */}

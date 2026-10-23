@@ -79,6 +79,8 @@ export default function RevenueByCategoryCard({ categories: propCategories, summ
     ? propCategories.map((c) => ({
         ...c,
         icon: ICON_MAP[c.id] || SparklesIcon,
+        barWidth: c.barWidth || c.bar_width || '40%',
+        barColor: c.barColor || c.bar_color || 'bg-[#6366f1]',
       }))
     : defaultCategories;
 
@@ -106,27 +108,43 @@ export default function RevenueByCategoryCard({ categories: propCategories, summ
         {categories.map((cat) => {
           const Icon = cat.icon;
           return (
-            <div key={cat.id} className="pt-3 first:pt-2 flex items-center justify-between gap-4">
-              {/* Category Name & Icon */}
-              <div className="flex items-center gap-2.5 min-w-[150px] sm:min-w-[190px]">
-                <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 shrink-0">
-                  <Icon className="w-3.5 h-3.5" />
+            <div key={cat.id} className="pt-3 first:pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+              {/* Category Name & Icon + Mobile Amount */}
+              <div className="flex items-center justify-between sm:justify-start gap-2.5 min-w-0 sm:min-w-[190px]">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 shrink-0">
+                    <Icon className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="truncate">
+                    <span className="text-xs font-semibold text-slate-800 block truncate">{cat.name}</span>
+                  </div>
                 </div>
-                <div className="truncate">
-                  <span className="text-xs font-semibold text-slate-800 block truncate">{cat.name}</span>
+
+                {/* Mobile Amount & Change Badge */}
+                <div className="flex sm:hidden items-center gap-2 shrink-0">
+                  <span className="text-xs font-bold text-slate-900 font-mono">{cat.amount}</span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      cat.positive
+                        ? 'text-emerald-700 bg-emerald-50 border border-emerald-200/70'
+                        : 'text-rose-700 bg-rose-50 border border-rose-200/70'
+                    }`}
+                  >
+                    {cat.change}
+                  </span>
                 </div>
               </div>
 
-              {/* Progress Bar Container */}
-              <div className="flex-1 max-w-[240px] bg-slate-100/80 h-2.5 rounded-full overflow-hidden">
+              {/* Progress Bar Container: full width on mobile, inline on sm+ */}
+              <div className="w-full sm:flex-1 sm:max-w-[240px] bg-slate-100/80 h-2 sm:h-2.5 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${cat.barColor}`}
                   style={{ width: cat.barWidth }}
                 />
               </div>
 
-              {/* Amount & Change Badge */}
-              <div className="flex items-center justify-end gap-3 min-w-[110px] text-right">
+              {/* Amount & Change Badge on Desktop (sm+) */}
+              <div className="hidden sm:flex items-center justify-end gap-3 min-w-[110px] text-right">
                 <span className="text-xs font-bold text-slate-900 font-mono">{cat.amount}</span>
                 <span
                   className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${

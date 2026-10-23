@@ -38,7 +38,12 @@ export default function PlatformOverviewCharts({
     { hour: '23', clicks: 5200, label: '23:00' },
   ];
 
-  const hourlyTraffic = (propHourly && propHourly.length > 0) ? propHourly : defaultHourlyTraffic;
+  const hourlyTraffic = (propHourly && propHourly.length > 0)
+    ? propHourly.map((h) => ({
+        ...h,
+        isPeak: h.isPeak ?? h.is_peak ?? false,
+      }))
+    : defaultHourlyTraffic;
   const initialPeakIdx = Math.max(0, hourlyTraffic.findIndex((h) => h.isPeak));
   const [activeHourIndex, setActiveHourIndex] = useState(initialPeakIdx >= 0 ? initialPeakIdx : 19);
 
@@ -51,7 +56,12 @@ export default function PlatformOverviewCharts({
     { name: 'WhatsApp Direct Share', share: '13%', barWidth: '13%', color: 'bg-emerald-500', visitors: '18,6 rb' },
     { name: 'Pencarian & Referal Langsung', share: '6%', barWidth: '6%', color: 'bg-indigo-300', visitors: '8,5 rb' },
   ];
-  const trafficChannels = (propChannels && propChannels.length > 0) ? propChannels : defaultTrafficChannels;
+  const trafficChannels = (propChannels && propChannels.length > 0)
+    ? propChannels.map((c) => ({
+        ...c,
+        barWidth: c.barWidth || c.bar_width || c.share || '20%',
+      }))
+    : defaultTrafficChannels;
 
   // Wilayah asal pengunjung terbanyak
   const defaultTopCities = [
@@ -70,7 +80,12 @@ export default function PlatformOverviewCharts({
     { sector: 'Personal Brand & Edukasi', count: '92 tenant', share: '22%', color: 'border-indigo-200 bg-indigo-50/50 text-indigo-900' },
     { sector: 'Jasa & Agensi', count: '67 tenant', share: '16%', color: 'border-emerald-200 bg-emerald-50/50 text-emerald-900' },
   ];
-  const creatorSegments = (propSegments && propSegments.length > 0) ? propSegments : defaultCreatorSegments;
+  const creatorSegments = (propSegments && propSegments.length > 0)
+    ? propSegments.map((s) => ({
+        ...s,
+        color: s.color || 'border-indigo-200 bg-indigo-50/50 text-indigo-900',
+      }))
+    : defaultCreatorSegments;
 
   // Tipe interaksi klik audiens
   const interactionTypes = [
@@ -107,61 +122,65 @@ export default function PlatformOverviewCharts({
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-[#ede9fe] text-[#5b21b6] border border-[#ddd6fe] shadow-2xs">
-                Jam Terpadat: 18:00 - 21:00 WIB
+                Jam Terpadat: {(hourlyTraffic.find((h) => h.isPeak) || hourlyTraffic[0])?.hour || '19'}:00 WIB
               </span>
             </div>
           </div>
 
           {/* Bar Chart Interaktif 24 Jam */}
           <div className="pt-6">
-            <div className="flex items-end justify-between gap-1 sm:gap-1.5 h-[160px] pb-2 border-b border-slate-100">
-              {hourlyTraffic.map((d, idx) => {
-                const heightPercent = Math.round((d.clicks / maxClick) * 100);
-                const isSelected = activeHourIndex === idx;
+            <div className="overflow-x-auto scrollbar-none pb-1">
+              <div className="min-w-[460px] sm:min-w-0">
+                <div className="flex items-end justify-between gap-1 sm:gap-1.5 h-[160px] pb-2 border-b border-slate-100">
+                  {hourlyTraffic.map((d, idx) => {
+                    const heightPercent = Math.round((d.clicks / maxClick) * 100);
+                    const isSelected = activeHourIndex === idx;
 
-                return (
-                  <div
-                    key={d.hour}
-                    onMouseEnter={() => setActiveHourIndex(idx)}
-                    className="flex-1 flex flex-col items-center justify-end h-full group cursor-pointer relative"
-                  >
-                    {/* Hover Floating Tooltip */}
-                    {isSelected && (
-                      <div className="absolute -top-10 z-20 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg whitespace-nowrap pointer-events-none">
-                        <span>{d.label}: {(d.clicks).toLocaleString('id-ID')} klik</span>
-                        <div className="w-2 h-2 bg-slate-900 rotate-45 mx-auto -mb-1" />
+                    return (
+                      <div
+                        key={d.hour}
+                        onMouseEnter={() => setActiveHourIndex(idx)}
+                        className="flex-1 flex flex-col items-center justify-end h-full group cursor-pointer relative"
+                      >
+                        {/* Hover Floating Tooltip */}
+                        {isSelected && (
+                          <div className="absolute -top-10 z-20 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg whitespace-nowrap pointer-events-none">
+                            <span>{d.label}: {(d.clicks).toLocaleString('id-ID')} klik</span>
+                            <div className="w-2 h-2 bg-slate-900 rotate-45 mx-auto -mb-1" />
+                          </div>
+                        )}
+
+                        {/* Bar Bar */}
+                        <div
+                          className={`w-full rounded-t-md transition-all duration-200 ${
+                            d.isPeak
+                              ? 'bg-[#6366f1] group-hover:bg-[#4f46e5]'
+                              : isSelected
+                              ? 'bg-[#818cf8]'
+                              : 'bg-[#e0e7ff] group-hover:bg-[#c7d2fe]'
+                          }`}
+                          style={{ height: `${Math.max(heightPercent, 6)}%` }}
+                        />
+
+                        {/* Hour Label */}
+                        <span className="text-[9px] text-slate-400 font-mono mt-1.5 transition-colors group-hover:text-slate-800">
+                          {idx % 3 === 0 ? d.hour : ''}
+                        </span>
                       </div>
-                    )}
-
-                    {/* Bar Bar */}
-                    <div
-                      className={`w-full rounded-t-md transition-all duration-200 ${
-                        d.isPeak
-                          ? 'bg-[#6366f1] group-hover:bg-[#4f46e5]'
-                          : isSelected
-                          ? 'bg-[#818cf8]'
-                          : 'bg-[#e0e7ff] group-hover:bg-[#c7d2fe]'
-                      }`}
-                      style={{ height: `${Math.max(heightPercent, 6)}%` }}
-                    />
-
-                    {/* Hour Label */}
-                    <span className="text-[9px] text-slate-400 font-mono mt-1.5 transition-colors group-hover:text-slate-800">
-                      {idx % 3 === 0 ? d.hour : ''}
-                    </span>
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             {/* Footer Keterangan */}
-            <div className="pt-3 flex items-center justify-between text-xs text-slate-500">
+            <div className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs text-slate-500">
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#6366f1]" />
-                <span className="font-semibold text-slate-700">Puncak Interaksi:</span> Malam hari (19:00 - 21:00 WIB)
+                <span className="font-semibold text-slate-700">Puncak Interaksi:</span> Jam {(hourlyTraffic.find((h) => h.isPeak) || hourlyTraffic[0])?.hour || '19'}:00 WIB ({((hourlyTraffic.find((h) => h.isPeak) || hourlyTraffic[0])?.clicks || 0).toLocaleString('id-ID')} interaksi)
               </span>
               <span className="text-[11px] text-slate-400 font-medium">
-                Peningkatan +124% aktivitas dibanding pagi hari
+                Distribusi 24 jam agregat dari database analitik Klikin
               </span>
             </div>
           </div>

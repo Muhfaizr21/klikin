@@ -180,13 +180,18 @@ func (s *UserManagementService) ListUsers(search, status, plan, sort string, pag
 		limit = 10
 	}
 
-	// 1. Calculate overall directory stats
+	// 1. Calculate overall directory stats in 1 single SQL scan
 	var stats UserListStats
-	s.db.Model(&models.User{}).Where("deleted_at IS NULL").Count(&stats.TotalUsers)
-	s.db.Model(&models.User{}).Where("deleted_at IS NULL AND (status = 'active' OR status = '' OR status IS NULL)").Count(&stats.ActiveUsers)
-	s.db.Model(&models.User{}).Where("deleted_at IS NULL AND is_pro = true").Count(&stats.ProUsers)
-	s.db.Model(&models.User{}).Where("deleted_at IS NULL AND status = 'suspended'").Count(&stats.SuspendedUsers)
-	s.db.Model(&models.User{}).Where("deleted_at IS NULL AND status = 'banned'").Count(&stats.BannedUsers)
+	s.db.Raw(`
+		SELECT
+			COUNT(*) AS total_users,
+			COALESCE(SUM(CASE WHEN status = 'active' OR status = '' OR status IS NULL THEN 1 ELSE 0 END), 0) AS active_users,
+			COALESCE(SUM(CASE WHEN is_pro = true THEN 1 ELSE 0 END), 0) AS pro_users,
+			COALESCE(SUM(CASE WHEN status = 'suspended' THEN 1 ELSE 0 END), 0) AS suspended_users,
+			COALESCE(SUM(CASE WHEN status = 'banned' THEN 1 ELSE 0 END), 0) AS banned_users
+		FROM users
+		WHERE deleted_at IS NULL
+	`).Scan(&stats)
 
 	// 2. Build filtered query
 	tx := s.db.Model(&models.User{}).Where("deleted_at IS NULL")

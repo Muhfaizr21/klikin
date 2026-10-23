@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -664,78 +665,60 @@ func (s *SubscriptionManagementService) syncMissingUserSubscriptions() {
 
 func (s *SubscriptionManagementService) computeOverviewStats() SubscriptionOverviewStats {
 	var stats SubscriptionOverviewStats
+	var wg sync.WaitGroup
+	wg.Add(3)
 
-	base := s.db.Table("subscriptions s").
-		Joins("JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL AND u.role = 'ACCOUNT_OWNER'")
+	go func() {
+		defer wg.Done()
+		s.db.Raw(`
+			SELECT
+				COUNT(*) AS total_subscriptions,
+				COALESCE(SUM(CASE WHEN s.plan = 'pro' AND s.status = 'active' THEN 1 ELSE 0 END), 0) AS active_pro_count,
+				COALESCE(SUM(CASE WHEN s.status = 'trial' THEN 1 ELSE 0 END), 0) AS trial_count,
+				COALESCE(SUM(CASE WHEN s.status = 'past_due' THEN 1 ELSE 0 END), 0) AS past_due_count,
+				COALESCE(SUM(CASE WHEN s.status = 'canceled' THEN 1 ELSE 0 END), 0) AS canceled_count,
+				COALESCE(SUM(CASE WHEN s.status = 'expired' THEN 1 ELSE 0 END), 0) AS expired_count,
+				COALESCE(SUM(CASE WHEN s.plan = 'free' THEN 1 ELSE 0 END), 0) AS free_count,
+				COALESCE(SUM(CASE
+					WHEN s.plan = 'pro' AND s.status IN ('active', 'past_due') THEN
+						CASE
+							WHEN s.billing_cycle = 'yearly' THEN (CASE WHEN s.price > 0 THEN s.price ELSE 29000 END) / 12
+							ELSE (CASE WHEN s.price > 0 THEN s.price ELSE 29000 END)
+						END
+					ELSE 0
+				END), 0) AS mrr
+			FROM subscriptions s
+			JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL AND u.role = 'ACCOUNT_OWNER'
+		`).Scan(&stats)
+		stats.ARR = stats.MRR * 12
+	}()
 
-	base.Count(&stats.TotalSubscriptions)
-
-	s.db.Table("subscriptions s").
-		Joins("JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL AND u.role = 'ACCOUNT_OWNER'").
-		Where("s.plan = 'pro' AND s.status = 'active'").Count(&stats.ActiveProCount)
-
-	s.db.Table("subscriptions s").
-		Joins("JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL AND u.role = 'ACCOUNT_OWNER'").
-		Where("s.status = 'trial'").Count(&stats.TrialCount)
-
-	s.db.Table("subscriptions s").
-		Joins("JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL AND u.role = 'ACCOUNT_OWNER'").
-		Where("s.status = 'past_due'").Count(&stats.PastDueCount)
-
-	s.db.Table("subscriptions s").
-		Joins("JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL AND u.role = 'ACCOUNT_OWNER'").
-		Where("s.status = 'canceled'").Count(&stats.CanceledCount)
-
-	s.db.Table("subscriptions s").
-		Joins("JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL AND u.role = 'ACCOUNT_OWNER'").
-		Where("s.status = 'expired'").Count(&stats.ExpiredCount)
-
-	s.db.Table("subscriptions s").
-		Joins("JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL AND u.role = 'ACCOUNT_OWNER'").
-		Where("s.plan = 'free'").Count(&stats.FreeCount)
-
-	// Calculate normalized MRR from active/past_due Pro subscriptions
-	var activeSubs []models.Subscription
-	s.db.Table("subscriptions s").
-		Joins("JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL AND u.role = 'ACCOUNT_OWNER'").
-		Where("s.plan = 'pro' AND s.status IN ('active', 'past_due')").
-		Find(&activeSubs)
-
-	var mrr int64
-	for _, sub := range activeSubs {
-		price := sub.Price
-		if price <= 0 {
-			price = 29000
+	go func() {
+		defer wg.Done()
+		var invSums struct {
+			Collected int64
+			Refunded  int64
+			Failed    int64
 		}
-		if sub.BillingCycle == "yearly" {
-			mrr += price / 12
-		} else {
-			mrr += price
-		}
-	}
-	stats.MRR = mrr
-	stats.ARR = mrr * 12
+		s.db.Raw(`
+			SELECT
+				COALESCE(SUM(CASE WHEN status = 'paid' THEN total ELSE 0 END), 0) as collected,
+				COALESCE(SUM(CASE WHEN status = 'refunded' THEN total ELSE 0 END), 0) as refunded,
+				COALESCE(SUM(CASE WHEN status = 'failed' THEN total ELSE 0 END), 0) as failed
+			FROM invoices
+		`).Scan(&invSums)
 
-	// Invoice totals
-	var invSums struct {
-		Collected int64
-		Refunded  int64
-		Failed    int64
-	}
-	s.db.Raw(`
-		SELECT
-			COALESCE(SUM(CASE WHEN status = 'paid' THEN total ELSE 0 END), 0) as collected,
-			COALESCE(SUM(CASE WHEN status = 'refunded' THEN total ELSE 0 END), 0) as refunded,
-			COALESCE(SUM(CASE WHEN status = 'failed' THEN total ELSE 0 END), 0) as failed
-		FROM invoices
-	`).Scan(&invSums)
+		stats.TotalCollected = invSums.Collected
+		stats.TotalRefunded = invSums.Refunded
+		stats.FailedAmount = invSums.Failed
+	}()
 
-	stats.TotalCollected = invSums.Collected
-	stats.TotalRefunded = invSums.Refunded
-	stats.FailedAmount = invSums.Failed
+	go func() {
+		defer wg.Done()
+		s.db.Model(&models.PromoCode{}).Where("is_active = ?", true).Count(&stats.ActivePromosCount)
+	}()
 
-	s.db.Model(&models.PromoCode{}).Where("is_active = ?", true).Count(&stats.ActivePromosCount)
-
+	wg.Wait()
 	return stats
 }
 
